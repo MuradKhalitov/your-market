@@ -1,0 +1,1 @@
+package ru.murad.yourmarket.repository;import org.springframework.data.jpa.repository.JpaRepository;import ru.murad.yourmarket.model.ModerationTelegramMessage;import java.util.*;public interface ModerationTelegramMessageRepository extends JpaRepository<ModerationTelegramMessage,UUID>{List<ModerationTelegramMessage> findByAdvertisementIdOrderByPosition(UUID id);}

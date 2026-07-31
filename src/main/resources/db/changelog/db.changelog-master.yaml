@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-initial-schema.yaml
+  - include:
+      file: db/changelog/changes/002-enhancements.yaml
+  - include:
+      file: db/changelog/changes/003-publication-safety.yaml
+  - include:
+      file: db/changelog/changes/004-rate-limit-cleanup.yaml
+  - include:
+      file: db/changelog/changes/005-operation-ownership.yaml
+  - include:
+      file: db/changelog/changes/006-safe-channel-position-constraint.yaml
+  - include:
+      file: db/changelog/changes/007-configuration-and-expiration-safety.yaml

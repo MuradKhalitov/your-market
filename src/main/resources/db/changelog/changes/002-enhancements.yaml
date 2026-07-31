@@ -1,0 +1,72 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-advertisement-lifecycle
+      author: codex
+      changes:
+        - addColumn:
+            tableName: advertisements
+            columns:
+              - column: {name: expires_at, type: timestamptz}
+              - column: {name: expired_at, type: timestamptz}
+              - column: {name: rejected_at, type: timestamptz}
+              - column: {name: rejection_reason, type: varchar(500)}
+        - createIndex:
+            tableName: advertisements
+            indexName: idx_ads_expiration
+            columns:
+              - column: {name: status}
+              - column: {name: expires_at}
+  - changeSet:
+      id: 003-multiple-photos
+      author: codex
+      changes:
+        - createTable:
+            tableName: advertisement_photos
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: telegram_file_id, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_photos, columnNames: "advertisement_id, position", constraintName: uk_ad_photo_position}
+        - sql: {sql: "ALTER TABLE advertisement_photos ADD CONSTRAINT chk_ad_photo_position CHECK (position between 0 and 4)"}
+        - createTable:
+            tableName: advertisement_draft_photos
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: draft_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: telegram_file_id, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_draft_photos, columnNames: "draft_id, position", constraintName: uk_draft_photo_position}
+        - sql: {sql: "ALTER TABLE advertisement_draft_photos ADD CONSTRAINT chk_draft_photo_position CHECK (position between 0 and 4)"}
+        - createTable:
+            tableName: advertisement_channel_messages
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: channel_message_id, type: integer, constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_channel_messages, columnNames: "advertisement_id, position", constraintName: uk_ad_channel_position}
+        - sql:
+            sql: INSERT INTO advertisement_photos (id, advertisement_id, telegram_file_id, position, created_at) SELECT gen_random_uuid(), id, telegram_file_id, 0, created_at FROM advertisements WHERE telegram_file_id IS NOT NULL ON CONFLICT DO NOTHING
+  - changeSet:
+      id: 004-draft-edit-mode
+      author: codex
+      changes:
+        - addColumn:
+            tableName: advertisement_drafts
+            columns:
+              - column: {name: edit_mode, type: boolean, defaultValueBoolean: false, constraints: {nullable: false}}
+  - changeSet:
+      id: 005-rate-limit
+      author: codex
+      changes:
+        - createTable:
+            tableName: telegram_rate_limits
+            columns:
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: action_type, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: window_started_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: action_count, type: integer, constraints: {nullable: false}}
+        - addPrimaryKey: {tableName: telegram_rate_limits, columnNames: "telegram_user_id, action_type", constraintName: pk_telegram_rate_limits}

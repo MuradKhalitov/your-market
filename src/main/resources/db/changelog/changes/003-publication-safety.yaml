@@ -1,0 +1,39 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-invoice-and-publication-safety
+      author: codex
+      changes:
+        - addColumn:
+            tableName: payments
+            columns:
+              - column: {name: invoice_send_status, type: varchar(30), defaultValue: NOT_SENT, constraints: {nullable: false}}
+              - column: {name: invoice_sending_since, type: timestamptz}
+              - column: {name: invoice_sent_at, type: timestamptz}
+        - addColumn:
+            tableName: advertisements
+            columns:
+              - column: {name: publication_operation_id, type: uuid}
+              - column: {name: publication_started_at, type: timestamptz}
+              - column: {name: publication_failure_reason, type: varchar(500)}
+              - column: {name: moderation_message_id, type: integer}
+              - column: {name: moderation_submitted_at, type: timestamptz}
+              - column: {name: moderation_submission_status, type: varchar(30), defaultValue: NOT_SUBMITTED, constraints: {nullable: false}}
+              - column: {name: moderation_sending_since, type: timestamptz}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_publication_operation, columns: [{column: {name: publication_operation_id}}]}
+  - changeSet:
+      id: 007-channel-message-deletion-state
+      author: codex
+      changes:
+        - addColumn:
+            tableName: advertisement_channel_messages
+            columns:
+              - column: {name: publication_operation_id, type: uuid}
+              - column: {name: deletion_status, type: varchar(30), defaultValue: ACTIVE, constraints: {nullable: false}}
+              - column: {name: deletion_started_at, type: timestamptz}
+              - column: {name: deleted_at, type: timestamptz}
+              - column: {name: delete_attempts, type: integer, defaultValueNumeric: 0, constraints: {nullable: false}}
+              - column: {name: last_delete_error, type: varchar(500)}
+        - sql:
+            sql: INSERT INTO advertisement_channel_messages (id, advertisement_id, channel_message_id, position, deletion_status, delete_attempts) SELECT gen_random_uuid(), id, channel_message_id, 0, 'ACTIVE', 0 FROM advertisements a WHERE channel_message_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM advertisement_channel_messages m WHERE m.advertisement_id=a.id)
+        - sql: {sql: "ALTER TABLE advertisement_channel_messages ADD CONSTRAINT chk_ad_channel_position CHECK (position between 0 and 5)"}
+        - createIndex: {tableName: advertisement_channel_messages, indexName: idx_channel_messages_deletion, columns: [{column: {name: advertisement_id}}, {column: {name: deletion_status}}]}

@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-safe-channel-position-constraint
+      author: codex
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM advertisement_channel_messages WHERE position < 0 OR position > 5) THEN
+                  RAISE EXCEPTION 'advertisement_channel_messages.position must be between 0 and 5';
+                END IF;
+              END $$;
+        - sql: {sql: "ALTER TABLE advertisement_channel_messages ADD CONSTRAINT chk_ad_channel_position_safe CHECK (position BETWEEN 0 AND 5) NOT VALID"}
+        - sql: {sql: "ALTER TABLE advertisement_channel_messages VALIDATE CONSTRAINT chk_ad_channel_position_safe"}
+      rollback:
+        - sql: {sql: "ALTER TABLE advertisement_channel_messages DROP CONSTRAINT IF EXISTS chk_ad_channel_position_safe"}

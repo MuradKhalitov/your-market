@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-rate-limit-cleanup-index
+      author: codex
+      changes:
+        - createIndex:
+            tableName: telegram_rate_limits
+            indexName: idx_rate_limits_window_started
+            columns:
+              - column: {name: window_started_at}

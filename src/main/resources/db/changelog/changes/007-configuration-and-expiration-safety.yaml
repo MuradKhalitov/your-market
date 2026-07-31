@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-expiration-operation-ownership
+      author: codex
+      changes:
+        - addColumn:
+            tableName: advertisements
+            columns:
+              - column: {name: expiration_operation_id, type: uuid}
+              - column: {name: expiration_started_at, type: timestamptz}
+        - createIndex:
+            tableName: advertisements
+            indexName: idx_ads_expiration_recovery
+            columns:
+              - column: {name: status}
+              - column: {name: expiration_started_at}
+      rollback:
+        - dropIndex: {tableName: advertisements, indexName: idx_ads_expiration_recovery}
+        - dropColumn: {tableName: advertisements, columnName: expiration_started_at}
+        - dropColumn: {tableName: advertisements, columnName: expiration_operation_id}

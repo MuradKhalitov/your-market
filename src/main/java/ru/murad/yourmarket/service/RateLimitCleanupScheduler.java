@@ -1,0 +1,3 @@
+package ru.murad.yourmarket.service;
+import lombok.RequiredArgsConstructor;import lombok.extern.slf4j.Slf4j;import org.springframework.scheduling.annotation.Scheduled;import org.springframework.stereotype.Component;
+@Slf4j @Component @RequiredArgsConstructor public class RateLimitCleanupScheduler {private final RateLimitService service;private final ru.murad.yourmarket.config.TelegramProperties properties;@Scheduled(cron="${telegram.rate-limit.cleanup-cron:0 0 3 * * *}")public void cleanup(){int total=0;for(int i=0;i<properties.rateLimit().cleanupMaxBatches();i++){int batch=service.cleanupExpired();total+=batch;if(batch<properties.rateLimit().cleanupBatchSize())break;}log.info("Удалено устаревших rate-limit записей: {}",total);}}
