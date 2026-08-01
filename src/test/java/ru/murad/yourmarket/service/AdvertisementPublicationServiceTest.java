@@ -1,5 +1,64 @@
-package ru.murad.yourmarket.service;import org.junit.jupiter.api.Test;import ru.murad.yourmarket.dto.response.AdvertisementResponseDto;import ru.murad.yourmarket.exception.TelegramPublicationException;import ru.murad.yourmarket.model.Advertisement;import ru.murad.yourmarket.model.enums.*;import ru.murad.yourmarket.service.impl.AdvertisementPublicationServiceImpl;import ru.murad.yourmarket.telegram.TelegramGateway;import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static org.mockito.Mockito.*;
-class AdvertisementPublicationServiceTest {PublicationTransactionService tx=mock(PublicationTransactionService.class);TelegramGateway tg=mock(TelegramGateway.class);AdvertisementPublicationServiceImpl service=new AdvertisementPublicationServiceImpl(tx,tg);UUID id=UUID.randomUUID(),op=UUID.randomUUID();Advertisement ad=Advertisement.builder().id(id).build();
-@Test void savesPrimaryProgressBeforeContact(){when(tx.claim(id,false)).thenReturn(new PublicationTransactionService.Claim(ad,op,true,null));when(tg.publishAdvertisementPrimaryMessages(ad)).thenReturn(List.of(1,2));when(tg.needsSeparateContactMessage(ad)).thenReturn(true);when(tg.publishAdvertisementContactMessage(ad)).thenReturn(3);service.publish(id);var order=inOrder(tx,tg);order.verify(tg).publishAdvertisementPrimaryMessages(ad);order.verify(tx).saveProgress(id,op,List.of(1,2),TelegramMessageType.MEDIA_GROUP_ITEM,false);order.verify(tg).publishAdvertisementContactMessage(ad);order.verify(tx).saveProgress(id,op,List.of(3),TelegramMessageType.CONTACT,true);order.verify(tx).complete(id,op);}
-@Test void contactFailureDoesNotRepeatMediaOnRetry(){when(tx.claim(id,false)).thenReturn(new PublicationTransactionService.Claim(ad,op,true,null)).thenReturn(new PublicationTransactionService.Claim(ad,op,false,null));when(tg.publishAdvertisementPrimaryMessages(ad)).thenReturn(List.of(1,2));when(tg.needsSeparateContactMessage(ad)).thenReturn(true);when(tg.publishAdvertisementContactMessage(ad)).thenThrow(new RuntimeException("contact"));assertThrows(TelegramPublicationException.class,()->service.publish(id));service.publish(id);verify(tg,times(1)).publishAdvertisementPrimaryMessages(ad);verify(tx).reconciliationRequired(id,op,"contact");}
-@Test void concurrentWorkerDoesNotPublish(){when(tx.claim(id,false)).thenReturn(new PublicationTransactionService.Claim(ad,op,false,mock(AdvertisementResponseDto.class)));service.publish(id);verifyNoInteractions(tg);}}
+package ru.murad.yourmarket.service;
+
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import ru.murad.yourmarket.dto.response.AdvertisementResponseDto;
+import ru.murad.yourmarket.model.Advertisement;
+import ru.murad.yourmarket.model.enums.TelegramMessageType;
+import ru.murad.yourmarket.service.impl.AdvertisementPublicationServiceImpl;
+import ru.murad.yourmarket.telegram.TelegramGateway;
+
+class AdvertisementPublicationServiceTest {
+    private final PublicationTransactionService transactions = mock(PublicationTransactionService.class);
+    private final TelegramGateway telegram = mock(TelegramGateway.class);
+    private final AdvertisementPublicationServiceImpl service = new AdvertisementPublicationServiceImpl(transactions, telegram);
+    private final UUID advertisementId = UUID.randomUUID();
+    private final UUID operationId = UUID.randomUUID();
+    private final Advertisement advertisement = Advertisement.builder().id(advertisementId).build();
+
+    @Test
+    void mediaGroupSavesExactlyReturnedMessageIdsAndCompletesWithoutActionMessage() {
+        when(transactions.claim(advertisementId, false)).thenReturn(
+                new PublicationTransactionService.Claim(advertisement, operationId, true, null));
+        when(telegram.publishAdvertisementPrimaryMessages(advertisement)).thenReturn(List.of(21, 22));
+        when(telegram.needsSeparateContactMessage(advertisement)).thenReturn(false);
+
+        service.publish(advertisementId);
+
+        var order = inOrder(transactions, telegram);
+        order.verify(telegram).publishAdvertisementPrimaryMessages(advertisement);
+        order.verify(transactions).saveProgress(advertisementId, operationId, List.of(21, 22),
+                TelegramMessageType.MEDIA_GROUP_ITEM, true);
+        order.verify(transactions).complete(advertisementId, operationId);
+        verify(telegram, never()).publishAdvertisementContactMessage(advertisement);
+    }
+
+    @Test
+    void singlePhotoSavesExactlyOneMessageId() {
+        when(transactions.claim(advertisementId, false)).thenReturn(
+                new PublicationTransactionService.Claim(advertisement, operationId, true, null));
+        when(telegram.publishAdvertisementPrimaryMessages(advertisement)).thenReturn(List.of(11));
+        when(telegram.needsSeparateContactMessage(advertisement)).thenReturn(false);
+
+        service.publish(advertisementId);
+
+        verify(transactions).saveProgress(advertisementId, operationId, List.of(11), TelegramMessageType.PHOTO, true);
+        verify(telegram, never()).publishAdvertisementContactMessage(advertisement);
+    }
+
+    @Test
+    void concurrentWorkerDoesNotPublish() {
+        when(transactions.claim(advertisementId, false)).thenReturn(
+                new PublicationTransactionService.Claim(advertisement, operationId, false, mock(AdvertisementResponseDto.class)));
+        service.publish(advertisementId);
+        verifyNoInteractions(telegram);
+    }
+}

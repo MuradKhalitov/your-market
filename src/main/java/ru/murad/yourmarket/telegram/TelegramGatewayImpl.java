@@ -18,7 +18,6 @@ import java.text.*;
 import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
-import ru.murad.yourmarket.service.TelegramBotLinkService;
 
 @Component
 @RequiredArgsConstructor
@@ -29,7 +28,6 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final PublicationProperties publication;
     private final TelegramKeyboardFactory keyboards;
     private final AdvertisementPhotoRepository photoRepository;
-    private final TelegramBotLinkService botLinkService;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -62,21 +60,12 @@ public class TelegramGatewayImpl implements TelegramGateway {
                     .chatId(telegram.channel().id())
                     .photo(new InputFile(fileId))
                     .caption(channelCaption(ad)).parseMode("HTML");
-            builder.replyMarkup(keyboards.publicationActions(ad.getContact(), botLinkService.buildPublishAdvertisementLink()));
+            if (USERNAME.matcher(ad.getContact()).matches()) builder.replyMarkup(keyboards.seller(ad.getContact()));
             Message message = client.execute(builder.build());
             return List.of(message.getMessageId());
         } catch (Exception ex) {
             throw new TelegramPublicationException("Не удалось опубликовать объявление", ex);
         }
-    }
-
-    @Override public boolean needsSeparateContactMessage(Advertisement ad) {
-        return photoRepository.findByAdvertisementIdOrderByPosition(ad.getId()).size()>1;
-    }
-    @Override public Integer publishAdvertisementContactMessage(Advertisement ad) {
-        try { return client.execute(SendMessage.builder().chatId(telegram.channel().id()).text("Действия с объявлением")
-                .replyMarkup(keyboards.publicationActions(ad.getContact(), botLinkService.buildPublishAdvertisementLink())).build()).getMessageId(); }
-        catch(Exception ex){throw new TelegramPublicationException("Не удалось опубликовать кнопку контакта",ex);}
     }
 
     @Override
@@ -160,7 +149,12 @@ public class TelegramGatewayImpl implements TelegramGateway {
         return "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 %s\n%s\n\n%s\n\n👤 Продавец: %s\n\n#%s #%s".formatted(
                 ad.getCategory().getEmoji(), html(ad.getTitle()), price(ad.getItemPrice()),
                 html(ad.getCity()), html(ad.getCategory().getDisplayName()), html(ad.getDescription()),
-                html(ad.getContact()), ad.getCategory().getHashtag(), hashtag(ad.getCity()));
+                contact(ad.getContact()), ad.getCategory().getHashtag(), hashtag(ad.getCity()));
+    }
+    private String contact(String value) {
+        if (!USERNAME.matcher(value).matches()) return html(value);
+        String username = value.substring(1);
+        return "<a href=\"https://t.me/" + username + "\">@" + username + "</a>";
     }
     public static String html(String value) {
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
