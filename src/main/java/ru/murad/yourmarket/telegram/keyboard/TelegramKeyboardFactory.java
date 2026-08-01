@@ -88,6 +88,15 @@ public class TelegramKeyboardFactory {
         return inlineRows(url("✉️ Написать продавцу", "https://t.me/" + contact.substring(1)));
     }
 
+    public InlineKeyboardMarkup publicationActions(String contact, String publishAdvertisementUrl) {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        if (contact != null && contact.matches("^@[A-Za-z0-9_]{5,32}$")) {
+            rows.add(new InlineKeyboardRow(url("✉️ Написать продавцу", "https://t.me/" + contact.substring(1))));
+        }
+        rows.add(new InlineKeyboardRow(url("➕ Разместить своё объявление", publishAdvertisementUrl)));
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
     private InlineKeyboardMarkup inlineRows(InlineKeyboardButton... buttons) {
         return InlineKeyboardMarkup.builder().keyboard(Arrays.stream(buttons).map(InlineKeyboardRow::new).toList()).build();
     }

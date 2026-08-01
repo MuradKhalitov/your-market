@@ -43,6 +43,7 @@ import ru.murad.yourmarket.service.TelegramChannelLinkService;
 import ru.murad.yourmarket.service.TelegramUserService;
 import ru.murad.yourmarket.telegram.handler.TelegramUpdateHandler;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
+import ru.murad.yourmarket.telegram.handler.StartCommandParser;
 
 class TelegramUpdateHandlerTest {
 
@@ -64,6 +65,7 @@ class TelegramUpdateHandlerTest {
         new TelegramProperties.Payment("provider"));
     PublicationProperties publication = publicationProperties();
     TelegramKeyboardFactory keyboards = new TelegramKeyboardFactory(publication);
+    StartCommandParser startCommands = new StartCommandParser();
 
     private PublicationProperties publicationProperties() {
         PublicationProperties properties = new PublicationProperties();
@@ -73,7 +75,7 @@ class TelegramUpdateHandlerTest {
     TelegramUpdateHandler handler = new TelegramUpdateHandler(client, gateway, keyboards, telegram,
         publication,
         users, drafts, payments, publications, advertisements, retries, links, moderation,
-        rateLimit, draftPhotos);
+        rateLimit, draftPhotos, startCommands);
 
     @BeforeEach
     void clientAcceptsMessages() throws Exception {
@@ -86,6 +88,28 @@ class TelegramUpdateHandlerTest {
         handler.handle(update("/start"));
         ReplyKeyboardMarkup keyboard = sentReplyKeyboard();
         assertMainMenu(keyboard);
+    }
+
+    @Test
+    void publishDeepLinkStartsNewDraft() throws Exception {
+        AdvertisementDraft draft = draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
+        when(drafts.findActive(1L)).thenReturn(Optional.empty());
+        when(drafts.startCreation(1L, 10L)).thenReturn(draft);
+
+        handler.handle(update("/start publish"));
+
+        verify(drafts).startCreation(1L, 10L);
+        assertTrue(lastMessage().getText().startsWith("Шаг 1 из 7"));
+    }
+
+    @Test
+    void publishDeepLinkResumesExistingDraft() throws Exception {
+        when(drafts.findActive(1L)).thenReturn(Optional.of(draft(AdvertisementCreationStep.WAITING_FOR_PRICE)));
+
+        handler.handle(update("/start publish"));
+
+        verify(drafts, never()).startCreation(anyLong(), anyLong());
+        assertTrue(lastMessage().getText().startsWith("Шаг 4 из 7"));
     }
 
     @Test

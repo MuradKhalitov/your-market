@@ -48,6 +48,7 @@ public class TelegramUpdateHandler {
     private final ModerationService moderationService;
     private final RateLimitService rateLimitService;
     private final ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository draftPhotoRepository;
+    private final StartCommandParser startCommandParser;
 
     public void handle(Update update) {
         String correlationId = update.getUpdateId() == null ? UUID.randomUUID().toString() : "tg-" + update.getUpdateId();
@@ -100,7 +101,9 @@ public class TelegramUpdateHandler {
         if (message.hasSuccessfulPayment()) { successfulPayment(message); return; }
 
         String value = message.hasText() ? message.getText().trim() : null;
-        if (isCommand(value, "/start")) { mainMenu(chatId); return; }
+        StartCommandParser.StartAction startAction = startCommandParser.parse(value);
+        if (startAction == StartCommandParser.StartAction.PUBLISH) { startOrResume(chatId, from); return; }
+        if (startAction == StartCommandParser.StartAction.MAIN_MENU) { mainMenu(chatId); return; }
         if (isCommand(value, "/menu")) { menuCommand(chatId, userId); return; }
         if (TelegramKeyboardFactory.CANCEL_CREATION.equals(value)) { cancelCreation(chatId, userId); return; }
         if (TelegramKeyboardFactory.PHOTOS_DONE.equals(value)) {

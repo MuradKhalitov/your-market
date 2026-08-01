@@ -18,6 +18,7 @@ import java.text.*;
 import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
+import ru.murad.yourmarket.service.TelegramBotLinkService;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +29,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final PublicationProperties publication;
     private final TelegramKeyboardFactory keyboards;
     private final AdvertisementPhotoRepository photoRepository;
+    private final TelegramBotLinkService botLinkService;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -60,7 +62,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
                     .chatId(telegram.channel().id())
                     .photo(new InputFile(fileId))
                     .caption(channelCaption(ad)).parseMode("HTML");
-            if (USERNAME.matcher(ad.getContact()).matches()) builder.replyMarkup(keyboards.seller(ad.getContact()));
+            builder.replyMarkup(keyboards.publicationActions(ad.getContact(), botLinkService.buildPublishAdvertisementLink()));
             Message message = client.execute(builder.build());
             return List.of(message.getMessageId());
         } catch (Exception ex) {
@@ -69,11 +71,11 @@ public class TelegramGatewayImpl implements TelegramGateway {
     }
 
     @Override public boolean needsSeparateContactMessage(Advertisement ad) {
-        return photoRepository.findByAdvertisementIdOrderByPosition(ad.getId()).size()>1 && USERNAME.matcher(ad.getContact()).matches();
+        return photoRepository.findByAdvertisementIdOrderByPosition(ad.getId()).size()>1;
     }
     @Override public Integer publishAdvertisementContactMessage(Advertisement ad) {
-        try { return client.execute(SendMessage.builder().chatId(telegram.channel().id()).text("Связаться с продавцом")
-                .replyMarkup(keyboards.seller(ad.getContact())).build()).getMessageId(); }
+        try { return client.execute(SendMessage.builder().chatId(telegram.channel().id()).text("Действия с объявлением")
+                .replyMarkup(keyboards.publicationActions(ad.getContact(), botLinkService.buildPublishAdvertisementLink())).build()).getMessageId(); }
         catch(Exception ex){throw new TelegramPublicationException("Не удалось опубликовать кнопку контакта",ex);}
     }
 
