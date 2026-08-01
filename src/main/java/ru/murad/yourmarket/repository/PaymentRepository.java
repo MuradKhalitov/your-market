@@ -10,6 +10,9 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByPayload(String payload);
     Optional<Payment> findByAdvertisementId(UUID advertisementId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.advertisementId = :advertisementId")
+    Optional<Payment> findByAdvertisementIdForUpdate(@Param("advertisementId") UUID advertisementId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id")
     Optional<Payment> findByIdForUpdate(@Param("id") UUID id);
 
