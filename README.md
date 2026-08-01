@@ -110,4 +110,80 @@ Invoice с неоднозначным результатом отправки п
 - нет возвратов и автоматического планировщика retry (retry доступен через admin endpoint);
 - long polling и синхронные вызовы Telegram API;
 - нет Web UI и пользовательской модерации;
-- защита admin endpoint оставлена задачей production-этапа.
+- admin endpoint защищён API key; в production-профиле пустой ключ запрещён.
+
+## Деплой на VPS
+
+### Docker Hub и локальная публикация
+
+1. Создайте в Docker Hub репозиторий `username/your-market`.
+2. Создайте Docker Hub access token (использовать пароль аккаунта не рекомендуется).
+3. Передайте token только в текущую PowerShell-сессию — не сохраняйте его в Git:
+
+```powershell
+$env:DOCKERHUB_TOKEN = "..."
+docker login --username username
+```
+
+Сборка, тесты, создание image и push:
+
+```powershell
+.\scripts\build-and-push.ps1 `
+  -DockerHubUsername username `
+  -Version 1.0.0
+```
+
+Без `-Version` скрипт создаёт тег из UTC/local timestamp и короткого Git commit. `-SkipTests`
+разрешён только для осознанной повторной технической сборки; обычный release выполняет `clean verify`.
+
+### Подготовка VPS
+
+Установите Docker Engine и Docker Compose plugin, затем создайте `/opt/yourmarket`. Скрипт
+`deploy/install-vps.sh` проверяет Ubuntu/Debian и выводит официальные инструкции, если Docker ещё
+не установлен; firewall он не изменяет.
+
+Скопируйте в `/opt/yourmarket`:
+
+- `deploy/docker-compose.prod.yml`;
+- `deploy/deploy.sh`;
+- `deploy/.env.prod.example` как `.env.prod`.
+
+Заполните `.env.prod` непосредственно на VPS и выполните:
+
+```bash
+chmod +x deploy.sh
+./deploy.sh docker.io/username/your-market:1.0.0
+```
+
+PostgreSQL использует именованный volume и не публикует порт наружу. HTTP-порт приложения доступен
+только как `127.0.0.1:8080`; наружу открыт лишь long polling Telegram. Production-профиль требует
+непустой `ADMIN_API_KEY`.
+
+Следующий release можно выполнить из Windows одной командой (SSH использует ключ, пароль параметром
+не принимается):
+
+```powershell
+.\scripts\release.ps1 `
+  -DockerHubUsername username `
+  -VpsHost server-ip `
+  -VpsUser deploy `
+  -Version 1.0.1
+```
+
+Состояние и логи на VPS:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml ps
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
+```
+
+При неуспешном healthcheck `deploy.sh` показывает последние 100 строк логов и пытается вернуть
+предыдущий image. Для ручного rollback запустите тот же скрипт с предыдущим неизменяемым тегом:
+
+```bash
+./deploy.sh docker.io/username/your-market:0.9.9
+```
+
+Перед критичными Liquibase-миграциями сделайте backup PostgreSQL. Deploy и rollback никогда не
+удаляют volume. На VPS должен работать только один экземпляр бота с данным token; при long polling
+webhook должен быть отключён. Публичный HTTP-домен приложению не требуется.

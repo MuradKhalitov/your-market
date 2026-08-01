@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: yourmarket-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - yourmarket-network
+
+  app:
+    image: ${YOURMARKET_IMAGE:?YOURMARKET_IMAGE is required}
+    container_name: yourmarket-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: production
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID}
+      TELEGRAM_CHANNEL_USERNAME: ${TELEGRAM_CHANNEL_USERNAME}
+      TELEGRAM_CHANNEL_URL: ${TELEGRAM_CHANNEL_URL}
+      YOOKASSA_PROVIDER_TOKEN: ${YOOKASSA_PROVIDER_TOKEN}
+      PUBLICATION_PRICE: ${PUBLICATION_PRICE:-199.00}
+      PUBLICATION_MODERATION_ENABLED: ${PUBLICATION_MODERATION_ENABLED:-false}
+      TELEGRAM_MODERATION_CHAT_ID: ${TELEGRAM_MODERATION_CHAT_ID:-}
+      TELEGRAM_ADMIN_USER_IDS: ${TELEGRAM_ADMIN_USER_IDS:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:?ADMIN_API_KEY is required}
+      TELEGRAM_RATE_LIMIT_ENABLED: ${TELEGRAM_RATE_LIMIT_ENABLED:-true}
+      TELEGRAM_RATE_LIMIT_MAX_ACTIONS: ${TELEGRAM_RATE_LIMIT_MAX_ACTIONS:-20}
+      TELEGRAM_RATE_LIMIT_WINDOW_SECONDS: ${TELEGRAM_RATE_LIMIT_WINDOW_SECONDS:-60}
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - yourmarket-network
+
+volumes:
+  postgres_data:
+
+networks:
+  yourmarket-network:
