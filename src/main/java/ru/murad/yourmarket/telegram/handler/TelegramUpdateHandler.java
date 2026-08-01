@@ -51,9 +51,19 @@ public class TelegramUpdateHandler {
     private final StartCommandParser startCommandParser;
 
     public void handle(Update update) {
+        if (update == null) {
+            log.debug("Пропущен null Telegram update");
+            return;
+        }
         String correlationId = update.getUpdateId() == null ? UUID.randomUUID().toString() : "tg-" + update.getUpdateId();
         try {
             MDC.put("correlationId", correlationId);
+            String eventType = eventType(update);
+            log.info("Получен Telegram updateId={}, type={}", update.getUpdateId(), eventType);
+            if (!isSupported(update)) {
+                log.debug("Пропущен неподдерживаемый Telegram updateId={}, type={}", update.getUpdateId(), eventType);
+                return;
+            }
             Long userId = extractUserId(update); Long chatId = extractChatId(update);
             if (userId != null) MDC.put("telegramUserId", userId.toString());
             if (chatId != null) MDC.put("chatId", chatId.toString());
@@ -63,6 +73,19 @@ public class TelegramUpdateHandler {
             }
             handleInternal(update);
         } finally { MDC.clear(); }
+    }
+
+    private boolean isSupported(Update update) {
+        return update.hasMessage() || update.hasCallbackQuery() || update.hasPreCheckoutQuery();
+    }
+
+    private String eventType(Update update) {
+        if (update.hasMessage()) return "message";
+        if (update.hasCallbackQuery()) return "callback_query";
+        if (update.hasPreCheckoutQuery()) return "pre_checkout_query";
+        if (update.hasChannelPost()) return "channel_post";
+        if (update.hasEditedChannelPost()) return "edited_channel_post";
+        return "unsupported";
     }
 
     private void handleInternal(Update update) {

@@ -35,6 +35,7 @@ build/
 .env.*
 !.env.example
 !.env.deploy.example
+!.env.prod.example
 application-local.yml
 application-prod.yml
 deploy/.env.prod
