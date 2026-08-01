@@ -14,5 +14,9 @@ public interface PaymentService {
     PreCheckoutResult approvePreCheckout(Long telegramUserId, String payload, String currency, Long totalAmount);
     SuccessfulPaymentResult processSuccessfulPayment(SuccessfulPaymentRequest request);
     record SuccessfulPaymentResult(UUID advertisementId, boolean newlyProcessed) {}
-    record InvoiceClaim(Payment payment, UUID operationId, boolean sendAllowed, boolean unknown) {}
+    enum InvoiceClaimResult { CLAIMED, ALREADY_SENT, IN_PROGRESS, UNKNOWN }
+    record InvoiceClaim(Payment payment, UUID operationId, InvoiceClaimResult result) {
+        public boolean sendAllowed() { return result == InvoiceClaimResult.CLAIMED; }
+        public boolean unknown() { return result == InvoiceClaimResult.UNKNOWN; }
+    }
 }

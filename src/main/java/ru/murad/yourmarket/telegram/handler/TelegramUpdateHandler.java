@@ -262,11 +262,13 @@ public class TelegramUpdateHandler {
     private void sendInvoice(Long chatId, User from) {
         PaymentService.InvoiceClaim claim = paymentService.createPaymentAndClaimInvoice(from.getId(), from.getUserName());
         if (!claim.sendAllowed()) {
-            if (claim.unknown()) {
-                send(chatId, "Не удалось определить состояние счёта. Обратитесь к администратору", keyboards.mainMenu());
-                return;
-            }
-            send(chatId, "Счёт уже создан. Используйте ранее отправленный счёт для оплаты", keyboards.mainMenu());
+            String message = switch (claim.result()) {
+                case ALREADY_SENT -> "Счёт уже был отправлен в этот чат выше. Найдите сообщение с кнопкой „Оплатить“. Новый счёт не создавался.";
+                case IN_PROGRESS -> "Счёт уже формируется. Подождите несколько секунд и проверьте сообщения в этом чате.";
+                case UNKNOWN -> "Не удалось однозначно определить, был ли счёт отправлен. Новый платёж не создавался. Проверьте сообщения выше или обратитесь к администратору.";
+                case CLAIMED -> throw new IllegalStateException("Захваченный invoice должен быть отправлен");
+            };
+            send(chatId, message, keyboards.mainMenu());
             return;
         }
         try {

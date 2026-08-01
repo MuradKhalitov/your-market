@@ -23,9 +23,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import ru.murad.yourmarket.model.Advertisement;
 import ru.murad.yourmarket.model.AdvertisementPhoto;
 import ru.murad.yourmarket.model.Payment;
+import ru.murad.yourmarket.model.TelegramUser;
+import ru.murad.yourmarket.model.AdvertisementDraft;
 import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import ru.murad.yourmarket.model.enums.AdvertisementStatus;
 import ru.murad.yourmarket.model.enums.PaymentStatus;
+import ru.murad.yourmarket.model.enums.AdvertisementCreationStep;
+import ru.murad.yourmarket.model.enums.InvoiceSendStatus;
 import ru.murad.yourmarket.repository.AdvertisementChannelMessageRepository;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
 import ru.murad.yourmarket.repository.AdvertisementRepository;
@@ -33,6 +37,9 @@ import ru.murad.yourmarket.repository.PaymentRepository;
 import ru.murad.yourmarket.service.AdvertisementExpirationService;
 import ru.murad.yourmarket.service.AdvertisementPublicationService;
 import ru.murad.yourmarket.service.RateLimitService;
+import ru.murad.yourmarket.service.PaymentService;
+import ru.murad.yourmarket.repository.TelegramUserRepository;
+import ru.murad.yourmarket.repository.AdvertisementDraftRepository;
 import ru.murad.yourmarket.telegram.TelegramGateway;
 
 @SpringBootTest(properties = {
@@ -72,6 +79,12 @@ class LiquibasePostgresIntegrationTest {
     AdvertisementPublicationService publicationService;
     @Autowired
     AdvertisementExpirationService expirationService;
+    @Autowired
+    PaymentService paymentService;
+    @Autowired
+    TelegramUserRepository telegramUsers;
+    @Autowired
+    AdvertisementDraftRepository drafts;
     @MockitoBean
     TelegramGateway telegramGateway;
 
@@ -155,6 +168,54 @@ class LiquibasePostgresIntegrationTest {
         assertThrows(DataIntegrityViolationException.class, () -> channelMessages.saveAndFlush(
             ru.murad.yourmarket.model.AdvertisementChannelMessage.builder()
                 .advertisementId(UUID.randomUUID()).channelMessageId(4).position(6).build()));
+    }
+
+    @Test
+    void concurrentInvoiceClaimsCreateOnePaymentAndOneOwner() throws Exception {
+        long userId = 88001L;
+        prepareCompleteDraft(userId);
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var task = (java.util.concurrent.Callable<PaymentService.InvoiceClaim>) () -> {
+                start.await();
+                return paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
+            };
+            var first = executor.submit(task);
+            var second = executor.submit(task);
+            start.countDown();
+            var claims = java.util.List.of(first.get(), second.get());
+
+            assertEquals(1, claims.stream().filter(c -> c.result() == PaymentService.InvoiceClaimResult.CLAIMED).count());
+            assertEquals(1, claims.stream().filter(c -> c.result() == PaymentService.InvoiceClaimResult.IN_PROGRESS).count());
+            assertEquals(1, repository.findAll().stream().filter(p -> p.getTelegramUserId().equals(userId)).count());
+            assertEquals(1, claims.stream().map(c -> c.payment().getPayload()).distinct().count());
+        }
+    }
+
+    @Test
+    void persistedSentInvoiceIsNotResetOrRecreatedAfterReload() {
+        long userId = 88002L;
+        prepareCompleteDraft(userId);
+        PaymentService.InvoiceClaim claimed = paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
+        paymentService.markInvoiceSent(claimed.payment().getId(), claimed.operationId());
+        String payload = claimed.payment().getPayload();
+
+        PaymentService.InvoiceClaim repeated = paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
+
+        assertEquals(PaymentService.InvoiceClaimResult.ALREADY_SENT, repeated.result());
+        assertEquals(InvoiceSendStatus.SENT, repeated.payment().getInvoiceSendStatus());
+        assertEquals(payload, repeated.payment().getPayload());
+        assertEquals(1, repository.findAll().stream().filter(p -> p.getTelegramUserId().equals(userId)).count());
+    }
+
+    private void prepareCompleteDraft(long userId) {
+        telegramUsers.saveAndFlush(TelegramUser.builder().telegramUserId(userId).chatId(userId)
+                .username("integration_user").firstName("Test").build());
+        drafts.saveAndFlush(AdvertisementDraft.builder().telegramUserId(userId).chatId(userId)
+                .step(AdvertisementCreationStep.PREVIEW).category(AdvertisementCategory.OTHER)
+                .title("Тестовый товар").description("Достаточно длинное описание")
+                .itemPrice(BigDecimal.TEN).telegramFileId("file").city("Москва").contact("@seller")
+                .build());
     }
 
     private void runConcurrently(Runnable action) throws Exception {

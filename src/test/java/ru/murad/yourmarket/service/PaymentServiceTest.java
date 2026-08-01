@@ -53,6 +53,7 @@ class PaymentServiceTest {
     AdvertisementDraftPhotoRepository draftPhotos = mock(AdvertisementDraftPhotoRepository.class);
     AdvertisementPhotoRepository adPhotos = mock(AdvertisementPhotoRepository.class);
     AdvertisementMapper mapper = mock(AdvertisementMapper.class);
+    PublicationProperties publication = publicationProperties(false);
     PaymentServiceImpl service = new PaymentServiceImpl(
         drafts,
         advertisements,
@@ -61,7 +62,7 @@ class PaymentServiceTest {
         draftPhotos,
         adPhotos,
         mapper,
-        publicationProperties(false)
+        publication
     );
 
     @Test
@@ -88,7 +89,49 @@ class PaymentServiceTest {
         Payment payment = payment(PaymentStatus.CREATED);
         when(payments.findByPayloadForUpdate("payload")).thenReturn(Optional.of(payment));
         assertFalse(service.approvePreCheckout(1L, "payload", "RUB", 1L).approved());
+        assertEquals(PaymentStatus.CREATED, payment.getStatus());
         verify(advertisements, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void existingPaymentUsesStoredPriceAfterConfigurationChange() {
+        Payment payment = payment(PaymentStatus.CREATED);
+        payment.setAmount(new BigDecimal("50.00"));
+        Advertisement advertisement = ad(AdvertisementStatus.WAITING_FOR_PAYMENT);
+        when(payments.findByPayloadForUpdate("payload")).thenReturn(Optional.of(payment));
+        when(advertisements.findByIdForUpdate(ADVERTISEMENT_ID)).thenReturn(Optional.of(advertisement));
+        publication.setPrice(new BigDecimal("1.00"));
+
+        assertTrue(service.approvePreCheckout(1L, "payload", "RUB", 5000L).approved());
+        var result = service.processSuccessfulPayment(new SuccessfulPaymentRequest(
+                1L, "payload", "RUB", 5000L, "tg-old-price", "provider-old-price"));
+
+        assertTrue(result.newlyProcessed());
+        assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
+        assertEquals(AdvertisementStatus.PAID, advertisement.getStatus());
+        assertEquals(new BigDecimal("50.00"), payment.getAmount());
+    }
+
+    @Test
+    void newPaymentUsesCurrentConfigurationPrice() {
+        publication.setPrice(new BigDecimal("1.00"));
+        AdvertisementDraft draft = completeDraft();
+        Advertisement advertisement = ad(AdvertisementStatus.WAITING_FOR_PAYMENT);
+        when(users.findByTelegramUserIdForUpdate(1L)).thenReturn(
+                Optional.of(TelegramUser.builder().telegramUserId(1L).build()));
+        when(drafts.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
+        when(draftPhotos.findByDraftIdOrderByPosition(any())).thenReturn(List.of());
+        when(advertisements.findFirstByTelegramUserIdAndStatusOrderByCreatedAtDesc(1L,
+                AdvertisementStatus.WAITING_FOR_PAYMENT)).thenReturn(Optional.empty());
+        when(mapper.toAdvertisement(draft, "user")).thenReturn(advertisement);
+        when(advertisements.save(advertisement)).thenReturn(advertisement);
+        when(payments.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Payment created = service.createPaymentAndClaimInvoice(1L, "user").payment();
+
+        assertEquals(new BigDecimal("1.00"), created.getAmount());
+        assertEquals("RUB", created.getCurrency());
+        assertNotNull(created.getPayload());
     }
 
     @Test
@@ -110,9 +153,37 @@ class PaymentServiceTest {
         when(drafts.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
         when(advertisements.findFirstByTelegramUserIdAndStatusOrderByCreatedAtDesc(1L,
             AdvertisementStatus.WAITING_FOR_PAYMENT)).thenReturn(Optional.of(ad));
-        when(payments.findByAdvertisementId(ad.getId())).thenReturn(Optional.of(payment));
+        when(payments.findByAdvertisementIdForUpdate(ad.getId())).thenReturn(Optional.of(payment));
         assertFalse(service.createPaymentAndClaimInvoice(1L, "user").sendAllowed());
         verify(payments, never()).save(any());
+        verify(advertisements, never()).save(any());
+        verify(mapper, never()).toAdvertisement(any(), any());
+        assertEquals(InvoiceSendStatus.SENT, payment.getInvoiceSendStatus());
+        assertEquals(PaymentStatus.CREATED, payment.getStatus());
+    }
+
+    @Test
+    void existingUnknownInvoiceCannotBeClaimedOrRecreated() {
+        AdvertisementDraft draft = completeDraft();
+        Advertisement advertisement = ad(AdvertisementStatus.WAITING_FOR_PAYMENT);
+        Payment payment = payment(PaymentStatus.CREATED);
+        payment.setInvoiceSendStatus(InvoiceSendStatus.SEND_UNKNOWN);
+        String payload = payment.getPayload();
+        when(users.findByTelegramUserIdForUpdate(1L)).thenReturn(
+                Optional.of(TelegramUser.builder().telegramUserId(1L).build()));
+        when(drafts.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
+        when(advertisements.findFirstByTelegramUserIdAndStatusOrderByCreatedAtDesc(1L,
+                AdvertisementStatus.WAITING_FOR_PAYMENT)).thenReturn(Optional.of(advertisement));
+        when(payments.findByAdvertisementIdForUpdate(advertisement.getId())).thenReturn(Optional.of(payment));
+
+        PaymentService.InvoiceClaim result = service.createPaymentAndClaimInvoice(1L, "user");
+
+        assertEquals(PaymentService.InvoiceClaimResult.UNKNOWN, result.result());
+        assertEquals(payload, result.payment().getPayload());
+        assertEquals(InvoiceSendStatus.SEND_UNKNOWN, result.payment().getInvoiceSendStatus());
+        verify(payments, never()).save(any());
+        verify(advertisements, never()).save(any());
+        verify(mapper, never()).toAdvertisement(any(), any());
     }
 
     @Test

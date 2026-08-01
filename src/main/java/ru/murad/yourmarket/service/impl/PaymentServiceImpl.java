@@ -40,7 +40,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .findFirstByTelegramUserIdAndStatusOrderByCreatedAtDesc(userId, AdvertisementStatus.WAITING_FOR_PAYMENT)
                 .orElse(null);
         if (pending != null) {
-            Payment activePayment = paymentRepository.findByAdvertisementId(pending.getId()).orElse(null);
+            Payment activePayment = paymentRepository.findByAdvertisementIdForUpdate(pending.getId()).orElse(null);
             if (activePayment != null && (activePayment.getStatus() == PaymentStatus.CREATED
                     || activePayment.getStatus() == PaymentStatus.PRE_CHECKOUT_APPROVED)) return claimInvoice(activePayment);
         }
@@ -74,16 +74,31 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setInvoiceSendStatus(InvoiceSendStatus.SEND_UNKNOWN);
             payment.setInvoiceSendingSince(null);
             payment.setInvoiceOperationId(null);
-            return new InvoiceClaim(paymentRepository.save(payment), null, false, true);
+            Payment saved = paymentRepository.save(payment);
+            logClaim(saved, null, InvoiceClaimResult.UNKNOWN);
+            return new InvoiceClaim(saved, null, InvoiceClaimResult.UNKNOWN);
         }
         if (payment.getInvoiceSendStatus() == InvoiceSendStatus.NOT_SENT) {
             payment.setInvoiceSendStatus(InvoiceSendStatus.SENDING);
             payment.setInvoiceSendingSince(Instant.now());
             UUID operationId=UUID.randomUUID(); payment.setInvoiceOperationId(operationId);
-            return new InvoiceClaim(paymentRepository.save(payment), operationId, true, false);
+            Payment saved = paymentRepository.save(payment);
+            logClaim(saved, operationId, InvoiceClaimResult.CLAIMED);
+            return new InvoiceClaim(saved, operationId, InvoiceClaimResult.CLAIMED);
         }
-        return new InvoiceClaim(payment, payment.getInvoiceOperationId(), false,
-                payment.getInvoiceSendStatus()==InvoiceSendStatus.SEND_UNKNOWN);
+        InvoiceClaimResult result = switch (payment.getInvoiceSendStatus()) {
+            case SENT -> InvoiceClaimResult.ALREADY_SENT;
+            case SENDING -> InvoiceClaimResult.IN_PROGRESS;
+            case SEND_UNKNOWN -> InvoiceClaimResult.UNKNOWN;
+            case NOT_SENT -> throw new IllegalStateException("NOT_SENT должен быть захвачен до формирования результата");
+        };
+        logClaim(payment, payment.getInvoiceOperationId(), result);
+        return new InvoiceClaim(payment, payment.getInvoiceOperationId(), result);
+    }
+
+    private void logClaim(Payment payment, UUID operationId, InvoiceClaimResult result) {
+        log.info("Invoice claim paymentId={}, advertisementId={}, invoiceSendStatus={}, operationId={}, result={}",
+                payment.getId(), payment.getAdvertisementId(), payment.getInvoiceSendStatus(), operationId, result);
     }
 
     @Override @Transactional
