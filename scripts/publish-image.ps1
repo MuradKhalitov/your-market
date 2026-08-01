@@ -82,10 +82,13 @@ try {
         throw "Docker daemon is unavailable. Start Docker Desktop."
     }
 
-    $repoRoot = (
-        & git rev-parse --show-toplevel 2>$null |
-            Select-Object -First 1
-    ).Trim()
+    $repoRootOutput = cmd.exe /c "git rev-parse --show-toplevel 2>&1"
+    $gitExitCode = $LASTEXITCODE
+    $repoRoot = ($repoRootOutput | Select-Object -First 1).Trim()
+
+    if ($gitExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) {
+        throw "Current location is not inside a Git repository. Git output: $repoRootOutput"
+    }
 
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) {
         throw "Current location is not inside a Git repository."
@@ -101,13 +104,12 @@ try {
         }
     }
 
-    $commit = (
-        & git rev-parse --short=7 HEAD 2>$null |
-            Select-Object -First 1
-    ).Trim()
+    $commitOutput = cmd.exe /c "git rev-parse --short=7 HEAD 2>&1"
+    $gitExitCode = $LASTEXITCODE
+    $commit = ($commitOutput | Select-Object -First 1).Trim()
 
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
-        throw "Unable to determine the current Git commit."
+    if ($gitExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
+        throw "Unable to determine the current Git commit. Git output: $commitOutput"
     }
 
     $workingTree = @(& git status --porcelain 2>$null)
