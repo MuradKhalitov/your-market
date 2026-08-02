@@ -46,7 +46,7 @@ public class TelegramKeyboardFactory {
     }
 
     public InlineKeyboardMarkup preview() {
-        return inlineRows(callback("💳 Оплатить " + publication.getPrice().toPlainString() + " ₽", "pay"),
+        return inlineRows(callback("Оплатить " + publication.getPriceStars() + " ⭐", "pay"),
                 callback("✏️ Изменить", "edit:menu"),
                 callback("❌ Отменить", "cancel"));
     }

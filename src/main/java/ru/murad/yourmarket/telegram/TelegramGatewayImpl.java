@@ -3,6 +3,7 @@ package ru.murad.yourmarket.telegram;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
+import org.telegram.telegrambots.meta.api.methods.payments.RefundStarPayment;
 import org.telegram.telegrambots.meta.api.methods.send.*;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -18,6 +19,7 @@ import java.text.*;
 import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
+import ru.murad.yourmarket.service.CurrencyAmountConverter;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final PublicationProperties publication;
     private final TelegramKeyboardFactory keyboards;
     private final AdvertisementPhotoRepository photoRepository;
+    private final CurrencyAmountConverter currencyAmountConverter;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -83,18 +86,41 @@ public class TelegramGatewayImpl implements TelegramGateway {
 
     @Override
     public void sendInvoice(Long chatId, Payment payment) {
+        if (!"XTR".equals(payment.getCurrency())) {
+            throw new IllegalArgumentException("Only XTR invoices are supported for publication");
+        }
+        int minorUnits;
         try {
-            client.execute(SendInvoice.builder().chatId(chatId)
+            minorUnits = currencyAmountConverter.toMinorUnits(payment.getAmount(), payment.getCurrency());
+        } catch (IllegalArgumentException exception) {
+            throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
+                    "Invalid invoice amount", null, "CURRENCY_TOTAL_AMOUNT_INVALID", exception);
+        }
+        try {
+            SendInvoice.SendInvoiceBuilder<?, ?> builder = SendInvoice.builder().chatId(chatId)
                     .title("Публикация объявления")
                     .description("Размещение объявления в канале YourMarket")
-                    .payload(payment.getPayload()).providerToken(telegram.payment().providerToken())
-                    .currency(payment.getCurrency())
+                    .payload(payment.getPayload()).currency("XTR")
                     .prices(List.of(new LabeledPrice("Размещение объявления",
-                            Math.toIntExact(payment.getAmount().movePointRight(2).longValueExact())))).build());
+                            minorUnits)))
+                    .needName(false).needPhoneNumber(false).needEmail(false)
+                    .needShippingAddress(false).isFlexible(false);
+            client.execute(builder.build());
         } catch (Exception ex) {
-            if (ex instanceof org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException)
-                throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException("Telegram rejected invoice", ex);
+            if (ex instanceof org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException request)
+                throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
+                        "Telegram rejected invoice", request.getErrorCode(), request.getApiResponse(), request);
             throw new TelegramPublicationException("Ambiguous invoice result", ex);
+        }
+    }
+
+    @Override
+    public void refundStarPayment(Long userId, String telegramPaymentChargeId) {
+        try {
+            client.execute(RefundStarPayment.builder().userId(userId)
+                    .telegramPaymentChargeId(telegramPaymentChargeId).build());
+        } catch (Exception exception) {
+            throw new TelegramPublicationException("Не удалось выполнить возврат Telegram Stars", exception);
         }
     }
 

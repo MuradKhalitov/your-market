@@ -42,4 +42,8 @@ public class Payment extends BaseEntity {
     private Instant invoiceSentAt;
     @Column(name = "invoice_operation_id")
     private UUID invoiceOperationId;
+    @Column(name = "refund_operation_id")
+    private UUID refundOperationId;
+    @Column(name = "refund_started_at")
+    private Instant refundStartedAt;
 }

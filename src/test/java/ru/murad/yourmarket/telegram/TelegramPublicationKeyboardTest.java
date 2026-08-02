@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,8 @@ import org.mockito.ArgumentCaptor;
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
+import org.telegram.telegrambots.meta.api.methods.payments.RefundStarPayment;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
@@ -25,6 +28,7 @@ import ru.murad.yourmarket.config.PublicationProperties;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.model.Advertisement;
 import ru.murad.yourmarket.model.AdvertisementPhoto;
+import ru.murad.yourmarket.model.Payment;
 import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
@@ -33,7 +37,58 @@ class TelegramPublicationKeyboardTest {
     private final TelegramClient client = mock(TelegramClient.class);
     private final AdvertisementPhotoRepository photos = mock(AdvertisementPhotoRepository.class);
     private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(), new PublicationProperties(),
-            new TelegramKeyboardFactory(new PublicationProperties()), photos);
+            new TelegramKeyboardFactory(new PublicationProperties()), photos,
+            new ru.murad.yourmarket.service.CurrencyAmountConverter());
+
+    @Test
+    void starsInvoiceUsesStarsWithoutMinorUnitConversion() throws Exception {
+        Payment payment = Payment.builder().payload("opaque-payload").amount(new BigDecimal("1.00"))
+                .currency("XTR").build();
+
+        gateway.sendInvoice(10L, payment);
+
+        ArgumentCaptor<SendInvoice> captor = ArgumentCaptor.forClass(SendInvoice.class);
+        verify(client).execute(captor.capture());
+        assertEquals("XTR", captor.getValue().getCurrency());
+        assertEquals(1, captor.getValue().getPrices().getFirst().getAmount());
+        assertEquals(1, captor.getValue().getPrices().size());
+        assertNull(captor.getValue().getProviderToken());
+        assertNull(captor.getValue().getMaxTipAmount());
+        assertTrue(captor.getValue().getSuggestedTipAmounts() == null
+                || captor.getValue().getSuggestedTipAmounts().isEmpty());
+        assertFalse(captor.getValue().getNeedName());
+        assertFalse(captor.getValue().getNeedPhoneNumber());
+        assertFalse(captor.getValue().getNeedEmail());
+        assertFalse(captor.getValue().getNeedShippingAddress());
+        assertFalse(captor.getValue().getIsFlexible());
+    }
+
+    @Test
+    void telegramRequestFailureKeepsStructuredError() throws Exception {
+        Payment payment = Payment.builder().payload("opaque-payload").amount(new BigDecimal("1.00"))
+                .currency("XTR").build();
+        var response = org.telegram.telegrambots.meta.api.objects.ApiResponse.builder()
+                .ok(false).errorCode(400).errorDescription("Bad Request: CURRENCY_TOTAL_AMOUNT_INVALID").build();
+        when(client.execute(any(SendInvoice.class))).thenThrow(
+                new org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException("request failed", response));
+
+        var failure = assertThrows(ru.murad.yourmarket.exception.TelegramConfirmedFailureException.class,
+                () -> gateway.sendInvoice(10L, payment));
+
+        assertEquals(400, failure.getErrorCode());
+        assertEquals("Bad Request: CURRENCY_TOTAL_AMOUNT_INVALID", failure.getApiDescription());
+        assertTrue(failure.isCurrencyTotalAmountInvalid());
+    }
+
+    @Test
+    void refundStarsUsesTelegramUserAndChargeId() throws Exception {
+        gateway.refundStarPayment(42L, "telegram-charge");
+
+        ArgumentCaptor<RefundStarPayment> captor = ArgumentCaptor.forClass(RefundStarPayment.class);
+        verify(client).execute(captor.capture());
+        assertEquals(42L, captor.getValue().getUserId());
+        assertEquals("telegram-charge", captor.getValue().getTelegramPaymentChargeId());
+    }
 
     @Test
     void singlePhotoContainsOnlySellerButtonAndClickableContactInCaption() throws Exception {

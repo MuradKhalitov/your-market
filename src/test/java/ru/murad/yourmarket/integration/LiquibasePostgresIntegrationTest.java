@@ -208,6 +208,51 @@ class LiquibasePostgresIntegrationTest {
         assertEquals(1, repository.findAll().stream().filter(p -> p.getTelegramUserId().equals(userId)).count());
     }
 
+    @Test
+    void confirmedInvoiceFailureIsOwnerCheckedInPostgres() {
+        long userId = 88003L;
+        prepareCompleteDraft(userId);
+        PaymentService.InvoiceClaim claimed = paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
+        UUID owner = claimed.operationId();
+
+        paymentService.failInvoiceSending(claimed.payment().getId(), UUID.randomUUID(), "foreign worker");
+        Payment unchanged = repository.findById(claimed.payment().getId()).orElseThrow();
+        assertEquals(InvoiceSendStatus.SENDING, unchanged.getInvoiceSendStatus());
+        assertEquals(owner, unchanged.getInvoiceOperationId());
+
+        paymentService.failInvoiceSending(claimed.payment().getId(), owner,
+                "Telegram invoice rejected: CURRENCY_TOTAL_AMOUNT_INVALID");
+        Payment released = repository.findById(claimed.payment().getId()).orElseThrow();
+        assertEquals(InvoiceSendStatus.NOT_SENT, released.getInvoiceSendStatus());
+        assertEquals(null, released.getInvoiceOperationId());
+        assertEquals(null, released.getInvoiceSendingSince());
+        assertEquals("Telegram invoice rejected: CURRENCY_TOTAL_AMOUNT_INVALID", released.getFailureReason());
+    }
+
+    @Test
+    void activeRubPaymentIsCancelledAndReplacedBySingleStarsPayment() {
+        long userId = 88004L;
+        prepareCompleteDraft(userId);
+        Advertisement pending = advertisements.saveAndFlush(Advertisement.builder().telegramUserId(userId)
+                .chatId(userId).category(AdvertisementCategory.OTHER).title("Старое объявление")
+                .description("Достаточно длинное описание").itemPrice(BigDecimal.TEN).telegramFileId("file")
+                .city("Москва").contact("@seller").status(AdvertisementStatus.WAITING_FOR_PAYMENT).build());
+        Payment rub = repository.saveAndFlush(Payment.builder().advertisementId(pending.getId())
+                .telegramUserId(userId).payload("legacy-rub-" + userId).amount(new BigDecimal("199.00"))
+                .currency("RUB").status(PaymentStatus.CREATED).invoiceSendStatus(InvoiceSendStatus.NOT_SENT).build());
+
+        PaymentService.InvoiceClaim claim = paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
+
+        Payment old = repository.findById(rub.getId()).orElseThrow();
+        assertEquals(PaymentStatus.CANCELLED, old.getStatus());
+        assertEquals("REPLACED_BY_STARS_MIGRATION", old.getFailureReason());
+        assertEquals("XTR", claim.payment().getCurrency());
+        assertEquals(BigDecimal.ONE, claim.payment().getAmount());
+        assertEquals(1, repository.findByAdvertisementIdOrderByCreatedAtDesc(pending.getId()).stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.CREATED
+                        || payment.getStatus() == PaymentStatus.PRE_CHECKOUT_APPROVED).count());
+    }
+
     private void prepareCompleteDraft(long userId) {
         telegramUsers.saveAndFlush(TelegramUser.builder().telegramUserId(userId).chatId(userId)
                 .username("integration_user").firstName("Test").build());

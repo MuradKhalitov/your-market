@@ -9,9 +9,17 @@ import org.springframework.stereotype.Component;
 public class ApplicationConfigurationValidator {
     private final PublicationProperties publication;
     private final TelegramProperties telegram;
+    private final ru.murad.yourmarket.service.CurrencyAmountConverter currencyAmountConverter;
 
     @PostConstruct
     void validate() {
+        try {
+            currencyAmountConverter.toMinorUnits(java.math.BigDecimal.valueOf(publication.getPriceStars()), "XTR");
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException(
+                    "Invalid configuration: publication.price-stars must be a positive integer fitting Telegram amount type",
+                    exception);
+        }
         if (!publication.isModerationEnabled()) return;
         if (telegram.getModeration() == null || telegram.getModeration().getChatId() == null
                 || telegram.getModeration().getChatId().isBlank()) {
