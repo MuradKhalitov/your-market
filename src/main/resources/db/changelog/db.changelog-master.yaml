@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/changes/005-vehicle-details.yaml
   - include:
       file: db/changelog/changes/006-vehicle-details-consistency.yaml
+  - include:
+      file: db/changelog/changes/007-advertisement-location.yaml

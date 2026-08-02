@@ -33,7 +33,8 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
         if (draft.getId() != null) { photoRepository.deleteByDraftId(draft.getId()); vehicleDetailsRepository.deleteByAdvertisementDraftId(draft.getId()); }
         draft.setStep(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
         draft.setCategory(null); draft.setTitle(null); draft.setDescription(null); draft.setItemPrice(null);
-        draft.setTelegramFileId(null); draft.setCity(null); draft.setContact(null);
+        draft.setTelegramFileId(null); draft.setCity(null); draft.setRegionCode(null); draft.setRegionNameSnapshot(null);
+        draft.setCityCode(null); draft.setCityNameSnapshot(null); draft.setCustomLocality(null); draft.setContact(null);
         draft.setEditMode(false);
         AdvertisementDraft saved = repository.save(draft);
         log.info("Начато создание объявления, step={}", saved.getStep());
@@ -85,7 +86,7 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
     public AdvertisementDraft setPhoto(Long userId, String fileId) {
         if (fileId == null || fileId.isBlank()) throw new DraftValidationException("Отправьте одну фотографию товара.");
         return update(userId, AdvertisementCreationStep.WAITING_FOR_PHOTO,
-                d -> d.setTelegramFileId(fileId), AdvertisementCreationStep.WAITING_FOR_CITY);
+                d -> d.setTelegramFileId(fileId), AdvertisementCreationStep.WAITING_FOR_REGION);
     }
 
     @Override
@@ -106,7 +107,7 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
         if (photoRepository.countByDraftId(draft.getId()) < 1 && draft.getTelegramFileId() == null)
             throw new DraftValidationException("Добавьте минимум одну фотографию.");
         if (draft.isEditMode()) { draft.setEditMode(false); draft.setStep(AdvertisementCreationStep.PREVIEW); }
-        else draft.setStep(AdvertisementCreationStep.WAITING_FOR_CITY);
+        else draft.setStep(AdvertisementCreationStep.WAITING_FOR_REGION);
         return repository.save(draft);
     }
 
@@ -116,13 +117,6 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
         photoRepository.deleteByDraftId(draft.getId());
         draft.setTelegramFileId(null);
         return repository.save(draft);
-    }
-
-    @Override
-    public AdvertisementDraft setCity(Long userId, String value) {
-        String text = normalized(value, 2, 100, "Город должен содержать от 2 до 100 символов.");
-        return update(userId, AdvertisementCreationStep.WAITING_FOR_CITY,
-                d -> d.setCity(text), AdvertisementCreationStep.WAITING_FOR_CONTACT_CHOICE);
     }
 
     @Override
@@ -168,8 +162,11 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
             case WAITING_FOR_DESCRIPTION -> AdvertisementCreationStep.WAITING_FOR_TITLE;
             case WAITING_FOR_PRICE -> AdvertisementCreationStep.WAITING_FOR_DESCRIPTION;
             case WAITING_FOR_PHOTO -> AdvertisementCreationStep.WAITING_FOR_PRICE;
-            case WAITING_FOR_CITY -> AdvertisementCreationStep.WAITING_FOR_PHOTO;
-            case WAITING_FOR_CONTACT_CHOICE -> AdvertisementCreationStep.WAITING_FOR_CITY;
+            case WAITING_FOR_REGION -> AdvertisementCreationStep.WAITING_FOR_PHOTO;
+            case WAITING_FOR_REGION_SEARCH -> AdvertisementCreationStep.WAITING_FOR_REGION;
+            case WAITING_FOR_CITY -> AdvertisementCreationStep.WAITING_FOR_REGION;
+            case WAITING_FOR_CITY_SEARCH, WAITING_FOR_CUSTOM_LOCALITY -> AdvertisementCreationStep.WAITING_FOR_CITY;
+            case WAITING_FOR_CONTACT_CHOICE -> AdvertisementCreationStep.WAITING_FOR_REGION;
             case WAITING_FOR_CUSTOM_CONTACT, PREVIEW -> AdvertisementCreationStep.WAITING_FOR_CONTACT_CHOICE;
             case WAITING_FOR_CATEGORY, NONE -> AdvertisementCreationStep.WAITING_FOR_CATEGORY;
         };

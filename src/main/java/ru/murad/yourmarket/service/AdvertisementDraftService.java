@@ -16,7 +16,6 @@ public interface AdvertisementDraftService {
     AdvertisementDraft addPhoto(Long userId, String fileId);
     AdvertisementDraft finishPhotos(Long userId);
     AdvertisementDraft clearPhotos(Long userId);
-    AdvertisementDraft setCity(Long userId, String value);
     AdvertisementDraft chooseUsernameContact(Long userId, String username);
     AdvertisementDraft requestCustomContact(Long userId);
     AdvertisementDraft setCustomContact(Long userId, String value);

@@ -28,6 +28,11 @@ public class AdvertisementDraft extends BaseEntity {
     @Column(name = "telegram_file_id")
     private String telegramFileId;
     private String city;
+    @Column(name = "region_code", length = 40) private String regionCode;
+    @Column(name = "region_name_snapshot", length = 120) private String regionNameSnapshot;
+    @Column(name = "city_code", length = 60) private String cityCode;
+    @Column(name = "city_name_snapshot", length = 120) private String cityNameSnapshot;
+    @Column(name = "custom_locality", length = 100) private String customLocality;
     private String contact;
     @Column(name = "edit_mode", nullable = false)
     private boolean editMode;

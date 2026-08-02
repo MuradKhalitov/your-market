@@ -30,3 +30,8 @@
 - [ ] Monitor VPS disk space and Docker log growth.
 - [ ] Docker JSON log rotation and `APP_MEM_LIMIT`/`POSTGRES_MEM_LIMIT` are configured for VPS capacity.
 - [ ] Operator procedure exists for Telegram 403/429, scheduler failure and paid-but-unpublished advertisements older than 15 minutes.
+# Location-flow
+
+- [ ] Республика Дагестан первая; Чечня вторая; Ингушетия третья.
+- [ ] Махачкала, Грозный и Назрань выбираются; «село Хучни» принимается вручную.
+- [ ] Проверены поиск, пагинация, возврат к регионам, restart/resume и preview/moderation/channel.

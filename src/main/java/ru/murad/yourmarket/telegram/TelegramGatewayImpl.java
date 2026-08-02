@@ -33,6 +33,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final OperationalMetrics metrics;
     private final TelegramErrorClassifier errorClassifier;
     private final VehicleDetailsService vehicleDetails;
+    private final ru.murad.yourmarket.service.LocationFormatter locationFormatter;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -186,8 +187,8 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private String channelCaption(Advertisement ad) {
         return "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 %s\n%s\n\n%s\n\n👤 Продавец: %s\n\n#%s #%s".formatted(
                 ad.getCategory().getEmoji(), html(ad.getTitle()), price(ad.getItemPrice()),
-                html(ad.getCity()), html(ad.getCategory().getDisplayName()), html(ad.getDescription()),
-                contact(ad.getContact()), ad.getCategory().getHashtag(), hashtag(ad.getCity()));
+                html(locationFormatter.format(ad)), html(ad.getCategory().getDisplayName()), html(ad.getDescription()),
+                contact(ad.getContact()), ad.getCategory().getHashtag(), hashtag(locationFormatter.format(ad)));
     }
     private String contact(String value) {
         if (!USERNAME.matcher(value).matches()) return html(value);

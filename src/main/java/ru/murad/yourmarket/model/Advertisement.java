@@ -36,6 +36,11 @@ public class Advertisement extends BaseEntity {
     @NotBlank @Size(min = 2, max = 100)
     @Column(nullable = false)
     private String city;
+    @Column(name = "region_code", length = 40) private String regionCode;
+    @Column(name = "region_name_snapshot", length = 120) private String regionNameSnapshot;
+    @Column(name = "city_code", length = 60) private String cityCode;
+    @Column(name = "city_name_snapshot", length = 120) private String cityNameSnapshot;
+    @Column(name = "custom_locality", length = 100) private String customLocality;
     @NotBlank @Size(min = 2, max = 255)
     @Column(nullable = false)
     private String contact;

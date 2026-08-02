@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-advertisement-location
+      author: yourmarket
+      changes:
+        - addColumn: {tableName: advertisement_drafts, columns: [{column: {name: region_code, type: varchar(40)}}, {column: {name: region_name_snapshot, type: varchar(120)}}, {column: {name: city_code, type: varchar(60)}}, {column: {name: city_name_snapshot, type: varchar(120)}}, {column: {name: custom_locality, type: varchar(100)}}]}
+        - addColumn: {tableName: advertisements, columns: [{column: {name: region_code, type: varchar(40)}}, {column: {name: region_name_snapshot, type: varchar(120)}}, {column: {name: city_code, type: varchar(60)}}, {column: {name: city_name_snapshot, type: varchar(120)}}, {column: {name: custom_locality, type: varchar(100)}}]}
+        - sql:
+            sql: |
+              ALTER TABLE advertisement_drafts ADD CONSTRAINT chk_draft_location_consistency CHECK ((region_code IS NULL AND region_name_snapshot IS NULL AND city_code IS NULL AND city_name_snapshot IS NULL AND custom_locality IS NULL) OR (region_code IS NOT NULL AND btrim(region_name_snapshot) <> '' AND ((city_code = 'OTHER' AND city_name_snapshot IS NULL AND custom_locality IS NOT NULL AND btrim(custom_locality) <> '') OR (city_code <> 'OTHER' AND city_name_snapshot IS NOT NULL AND btrim(city_name_snapshot) <> '' AND custom_locality IS NULL))));
+              ALTER TABLE advertisements ADD CONSTRAINT chk_ad_location_consistency CHECK ((region_code IS NULL AND region_name_snapshot IS NULL AND city_code IS NULL AND city_name_snapshot IS NULL AND custom_locality IS NULL) OR (region_code IS NOT NULL AND btrim(region_name_snapshot) <> '' AND ((city_code = 'OTHER' AND city_name_snapshot IS NULL AND custom_locality IS NOT NULL AND btrim(custom_locality) <> '') OR (city_code <> 'OTHER' AND city_name_snapshot IS NOT NULL AND btrim(city_name_snapshot) <> '' AND custom_locality IS NULL))));
+      rollback:
+        - sql: {sql: "ALTER TABLE advertisement_drafts DROP CONSTRAINT IF EXISTS chk_draft_location_consistency; ALTER TABLE advertisements DROP CONSTRAINT IF EXISTS chk_ad_location_consistency;"}
+        - dropColumn: {tableName: advertisement_drafts, columnName: custom_locality}
+        - dropColumn: {tableName: advertisements, columnName: custom_locality}

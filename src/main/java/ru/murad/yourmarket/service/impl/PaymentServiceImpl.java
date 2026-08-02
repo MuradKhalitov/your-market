@@ -198,7 +198,13 @@ public class PaymentServiceImpl implements PaymentService {
     private void validateComplete(AdvertisementDraft d) {
         if (d.getStep() != AdvertisementCreationStep.PREVIEW || d.getCategory() == null || d.getTitle() == null
                 || d.getDescription() == null || d.getItemPrice() == null || d.getTelegramFileId() == null
-                || d.getCity() == null || d.getContact() == null)
+                || !completeLocation(d) || d.getContact() == null)
             throw new InvalidAdvertisementStateException("Заполните все поля объявления перед оплатой.");
+    }
+    private boolean completeLocation(AdvertisementDraft d) {
+        if (d.getRegionCode() == null) return d.getCity() != null; // legacy draft created before structured location rollout
+        if (d.getRegionNameSnapshot() == null || d.getCityCode() == null) return false;
+        return "OTHER".equals(d.getCityCode()) ? d.getCustomLocality() != null && !d.getCustomLocality().isBlank()
+                : d.getCityNameSnapshot() != null && d.getCustomLocality() == null;
     }
 }

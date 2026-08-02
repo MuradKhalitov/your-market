@@ -22,6 +22,7 @@ import ru.murad.yourmarket.service.*;
 import ru.murad.yourmarket.telegram.*;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
 import ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory;
+import ru.murad.yourmarket.telegram.keyboard.LocationKeyboardFactory;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -55,6 +56,9 @@ public class TelegramUpdateHandler {
     private final VehicleDraftFlowService vehicleFlow;
     private final VehicleKeyboardFactory vehicleKeyboards;
     private final VehicleDetailsFormatter vehicleFormatter;
+    private final AdvertisementLocationFlowService locationFlow;
+    private final LocationKeyboardFactory locationKeyboards;
+    private final LocationFormatter locationFormatter;
 
     public void handle(Update update) {
         if (update == null) {
@@ -199,11 +203,11 @@ public class TelegramUpdateHandler {
                 send(message.getChatId(), "Фотография добавлена. Добавьте ещё или нажмите «✅ Готово».",
                         keyboards.photoNavigation(true));
             }
-            case WAITING_FOR_CITY -> {
-                AdvertisementDraft updated = draftService.setCity(userId, text(message));
-                if (updated.getStep() == AdvertisementCreationStep.PREVIEW) preview(updated);
-                else contactPrompt(message.getChatId(), message.getFrom().getUserName());
-            }
+            case WAITING_FOR_REGION -> locationRegionPrompt(message.getChatId());
+            case WAITING_FOR_REGION_SEARCH -> locationRegionSearch(message.getChatId(), text(message));
+            case WAITING_FOR_CITY -> locationCityPrompt(message.getChatId(), userId);
+            case WAITING_FOR_CITY_SEARCH -> locationCitySearch(message.getChatId(), userId, text(message));
+            case WAITING_FOR_CUSTOM_LOCALITY -> { locationFlow.setCustomLocality(userId, text(message)); contactPrompt(message.getChatId(), message.getFrom().getUserName()); }
             case WAITING_FOR_CONTACT_CHOICE -> acceptContact(message, userId);
             case WAITING_FOR_CUSTOM_CONTACT -> preview(draftService.setCustomContact(userId, text(message)));
             case PREVIEW -> send(message.getChatId(), "Используйте кнопку оплаты под предпросмотром или отмените создание.",
@@ -236,6 +240,7 @@ public class TelegramUpdateHandler {
         if ("cancel".equals(data)) cancelCreation(chatId, from.getId());
         else if (data != null && data.startsWith("ad:category:")) handleCategoryCallback(callback, chatId);
         else if (data != null && data.startsWith("ad:auto:")) handleVehicleCallback(callback, chatId);
+        else if (data != null && data.startsWith("ad:loc:")) handleLocationCallback(callback, chatId);
         else if ("edit:menu".equals(data)) send(chatId, "Что изменить?", keyboards.editMenu());
         else if ("edit:preview".equals(data)) draftService.findActive(from.getId()).ifPresent(this::preview);
         else if (data.startsWith("edit:")) {
@@ -245,7 +250,7 @@ public class TelegramUpdateHandler {
                 case "DESCRIPTION" -> AdvertisementCreationStep.WAITING_FOR_DESCRIPTION;
                 case "PRICE" -> AdvertisementCreationStep.WAITING_FOR_PRICE;
                 case "PHOTOS" -> AdvertisementCreationStep.WAITING_FOR_PHOTO;
-                case "CITY" -> AdvertisementCreationStep.WAITING_FOR_CITY;
+                case "CITY" -> AdvertisementCreationStep.WAITING_FOR_REGION;
                 case "CONTACT" -> AdvertisementCreationStep.WAITING_FOR_CONTACT_CHOICE;
                 default -> throw new DraftValidationException("Неизвестное поле редактирования");
             };
@@ -353,7 +358,11 @@ public class TelegramUpdateHandler {
             case WAITING_FOR_PRICE -> creationPrompt(draft.getChatId(), "Шаг 4 из 7 — цена\nВведите цену товара:");
             case WAITING_FOR_PHOTO -> send(draft.getChatId(), photoPrompt(),
                     keyboards.photoNavigation(draft.getTelegramFileId() != null));
-            case WAITING_FOR_CITY -> creationPrompt(draft.getChatId(), "Шаг 6 из 7 — город\nВведите город:");
+            case WAITING_FOR_REGION -> locationRegionPrompt(draft.getChatId());
+            case WAITING_FOR_REGION_SEARCH -> send(draft.getChatId(), "Введите название или несколько букв региона:", keyboards.creationNavigation(false));
+            case WAITING_FOR_CITY -> locationCityPrompt(draft.getChatId(), draft.getTelegramUserId());
+            case WAITING_FOR_CITY_SEARCH -> send(draft.getChatId(), "Введите название или несколько букв города:", keyboards.creationNavigation(false));
+            case WAITING_FOR_CUSTOM_LOCALITY -> send(draft.getChatId(), "Введите название населённого пункта, например: село Хучни, посёлок Мамедкала или аул:", keyboards.creationNavigation(false));
             case WAITING_FOR_CONTACT_CHOICE -> contactPrompt(draft.getChatId(), username);
             case WAITING_FOR_CUSTOM_CONTACT -> creationPrompt(draft.getChatId(), "Шаг 7 из 7 — контакт\nВведите контакт для связи:");
             case PREVIEW -> preview(draft);
@@ -420,6 +429,27 @@ public class TelegramUpdateHandler {
         if (data.startsWith("ad:auto:d:")) { vehicleFlow.setDriveType(userId, enumValue(DriveType.class, data.substring(10))); send(chatId, "Характеристики автомобиля сохранены. Теперь отправьте название объявления.", keyboards.creationNavigation(false)); return; }
         throw new DraftValidationException("Неизвестное действие выбора автомобиля.");
     }
+
+    private void handleLocationCallback(CallbackQuery callback, Long chatId) {
+        Long userId = callback.getFrom().getId(); String data = callback.getData();
+        AdvertisementDraft draft = draftService.findActive(userId).filter(d -> Objects.equals(d.getChatId(), chatId))
+                .orElseThrow(() -> new DraftValidationException("Этот выбор местоположения не принадлежит активному черновику."));
+        if ("ad:loc:page".equals(data)) return;
+        if (data.startsWith("ad:loc:rp:")) { locationRegionPrompt(chatId, page(data,"ad:loc:rp:")); return; }
+        if (data.startsWith("ad:loc:cp:")) { locationCityPrompt(chatId,userId,page(data,"ad:loc:cp:")); return; }
+        if ("ad:loc:rs".equals(data)) { locationFlow.beginRegionSearch(userId); send(chatId,"Введите название или несколько букв региона:",keyboards.creationNavigation(false)); return; }
+        if ("ad:loc:cs".equals(data)) { locationFlow.beginCitySearch(userId); send(chatId,"Введите название или несколько букв города:",keyboards.creationNavigation(false)); return; }
+        if ("ad:loc:other".equals(data)) { locationFlow.beginCustomLocality(userId); send(chatId,"Введите название населённого пункта, например: село Хучни, посёлок Мамедкала или аул:",keyboards.creationNavigation(false)); return; }
+        if ("ad:loc:regions".equals(data)) { locationFlow.backToRegions(userId); locationRegionPrompt(chatId); return; }
+        if ("ad:loc:cities".equals(data)) { locationCityPrompt(chatId,userId); return; }
+        if (data.startsWith("ad:loc:r:")) { AdvertisementDraft result=locationFlow.chooseRegion(userId,data.substring(9)); if(result.getStep()==AdvertisementCreationStep.WAITING_FOR_CONTACT_CHOICE) contactPrompt(chatId,callback.getFrom().getUserName()); else locationCityPrompt(chatId,userId); return; }
+        if (data.startsWith("ad:loc:c:")) { locationFlow.chooseCity(userId,data.substring(9)); contactPrompt(chatId,callback.getFrom().getUserName()); return; }
+        throw new DraftValidationException("Неизвестное действие местоположения.");
+    }
+    private void locationRegionPrompt(Long chatId){locationRegionPrompt(chatId,0);} private void locationRegionPrompt(Long chatId,int page){sendInline(chatId,"Выберите регион:",locationKeyboards.regions(page));}
+    private void locationCityPrompt(Long chatId,Long userId){locationCityPrompt(chatId,userId,0);} private void locationCityPrompt(Long chatId,Long userId,int page){AdvertisementDraft d=draftService.findActive(userId).orElseThrow(()->new DraftValidationException("Активный черновик не найден."));sendInline(chatId,"Выберите город в регионе «"+d.getRegionNameSnapshot()+"»:",locationKeyboards.cities(d.getRegionCode(),page));}
+    private void locationRegionSearch(Long chatId,String q){if(q.trim().length()<2||q.trim().length()>60)throw new DraftValidationException("Введите от 2 до 60 символов для поиска региона.");var markup=locationKeyboards.regionSearch(q);sendInline(chatId,"Выберите регион из результатов поиска:",markup);}
+    private void locationCitySearch(Long chatId,Long userId,String q){AdvertisementDraft d=draftService.findActive(userId).orElseThrow(()->new DraftValidationException("Активный черновик не найден."));if(q.trim().length()<2||q.trim().length()>60)throw new DraftValidationException("Введите от 2 до 60 символов для поиска города.");sendInline(chatId,"Выберите город из результатов поиска:",locationKeyboards.citySearch(d.getRegionCode(),q));}
 
     private <T extends Enum<T>> T enumValue(Class<T> type, String code) { try { return Enum.valueOf(type, code); } catch (IllegalArgumentException ex) { throw new DraftValidationException("Неизвестное значение. Выберите вариант кнопкой."); } }
     private int page(String data, String prefix) { try { return Math.max(0, Integer.parseInt(data.substring(prefix.length()))); } catch (RuntimeException ex) { throw new DraftValidationException("Некорректная страница каталога."); } }
@@ -512,7 +542,7 @@ public class TelegramUpdateHandler {
     private void preview(AdvertisementDraft d) {
         String caption = "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 Город: %s\nКатегория: %s\n\n%s\n\n👤 Продавец: %s\n\nСтоимость публикации: %s ⭐"
                 .formatted(d.getCategory().getEmoji(), TelegramGatewayImpl.html(d.getTitle()),
-                        TelegramGatewayImpl.price(d.getItemPrice()), TelegramGatewayImpl.html(d.getCity()),
+                        TelegramGatewayImpl.price(d.getItemPrice()), TelegramGatewayImpl.html(locationFormatter.format(d)),
                         d.getCategory().getDisplayName(), TelegramGatewayImpl.html(d.getDescription()),
                         TelegramGatewayImpl.html(d.getContact()), publication.getPriceStars());
         if (d.getCategory() == AdvertisementCategory.AUTO) {

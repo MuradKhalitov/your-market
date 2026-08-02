@@ -75,6 +75,8 @@ class TelegramUpdateHandlerTest {
     StartCommandParser startCommands = new StartCommandParser();
     ru.murad.yourmarket.service.VehicleDraftFlowService vehicleFlow = mock(ru.murad.yourmarket.service.VehicleDraftFlowService.class);
     ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory vehicleKeyboards = mock(ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory.class);
+    ru.murad.yourmarket.service.AdvertisementLocationFlowService locationFlow = mock(ru.murad.yourmarket.service.AdvertisementLocationFlowService.class);
+    ru.murad.yourmarket.telegram.keyboard.LocationKeyboardFactory locationKeyboards = mock(ru.murad.yourmarket.telegram.keyboard.LocationKeyboardFactory.class);
 
     private PublicationProperties publicationProperties() {
         PublicationProperties properties = new PublicationProperties();
@@ -86,7 +88,8 @@ class TelegramUpdateHandlerTest {
         users, drafts, payments, publications, advertisements, retries, links, moderation,
         rateLimit, draftPhotos, startCommands,
         new ru.murad.yourmarket.telegram.TelegramMessageProvider(), vehicleFlow, vehicleKeyboards,
-        new ru.murad.yourmarket.service.VehicleDetailsFormatter());
+        new ru.murad.yourmarket.service.VehicleDetailsFormatter(), locationFlow, locationKeyboards,
+        new ru.murad.yourmarket.service.LocationFormatter());
 
     @BeforeEach
     void clientAcceptsMessages() throws Exception {
