@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doThrow;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -74,13 +75,14 @@ class TelegramUpdateHandlerTest {
 
     private PublicationProperties publicationProperties() {
         PublicationProperties properties = new PublicationProperties();
-        properties.setPrice(new BigDecimal("199.00"));
+        properties.setPriceStars(1);
         return properties;
     }
     TelegramUpdateHandler handler = new TelegramUpdateHandler(client, gateway, keyboards, telegram,
         publication,
         users, drafts, payments, publications, advertisements, retries, links, moderation,
-        rateLimit, draftPhotos, startCommands);
+        rateLimit, draftPhotos, startCommands, new ru.murad.yourmarket.service.CurrencyAmountConverter(),
+        new ru.murad.yourmarket.telegram.TelegramMessageProvider());
 
     @BeforeEach
     void clientAcceptsMessages() throws Exception {
@@ -183,6 +185,24 @@ class TelegramUpdateHandlerTest {
     }
 
     @Test
+    void termsCommandReturnsStarsTerms() throws Exception {
+        handler.handle(update("/terms"));
+        assertTrue(lastMessage().getText().contains("1 ⭐"));
+    }
+
+    @Test
+    void paymentSupportCommandReturnsSupportMessage() throws Exception {
+        handler.handle(update("/paysupport"));
+        assertTrue(lastMessage().getText().contains("Поддержка по оплате"));
+    }
+
+    @Test
+    void supportCommandReturnsGeneralSupportMessage() throws Exception {
+        handler.handle(update("/support"));
+        assertTrue(lastMessage().getText().contains("общим вопросам"));
+    }
+
+    @Test
     void repeatedSentInvoiceShowsClearHintWithoutSendingAnotherInvoice() throws Exception {
         Payment payment = payment(InvoiceSendStatus.SENT);
         when(payments.createPaymentAndClaimInvoice(1L, "seller"))
@@ -190,7 +210,7 @@ class TelegramUpdateHandlerTest {
 
         handler.handle(callback("pay"));
 
-        assertEquals("Счёт уже был отправлен в этот чат выше. Найдите сообщение с кнопкой „Оплатить“. Новый счёт не создавался.",
+        assertEquals("Счёт на 1 ⭐ уже был отправлен в этот чат выше. Найдите сообщение с кнопкой оплаты.",
                 lastMessage().getText());
         verify(gateway, never()).sendInvoice(anyLong(), any(Payment.class));
         verify(payments, never()).markInvoiceSent(any(), any());
@@ -206,7 +226,7 @@ class TelegramUpdateHandlerTest {
 
         handler.handle(callback("pay"));
 
-        assertEquals("Не удалось однозначно определить, был ли счёт отправлен. Новый платёж не создавался. Проверьте сообщения выше или обратитесь к администратору.",
+        assertEquals("Не удалось определить, был ли счёт отправлен. Новый счёт не создавался. Обратитесь в поддержку.",
                 lastMessage().getText());
         verify(gateway, never()).sendInvoice(anyLong(), any(Payment.class));
         verify(payments, never()).markInvoiceUnknown(any(), any());
@@ -225,7 +245,7 @@ class TelegramUpdateHandlerTest {
 
         handler.handle(callback("pay"));
 
-        assertEquals("Счёт уже формируется. Подождите несколько секунд и проверьте сообщения в этом чате.",
+        assertEquals("Счёт на оплату формируется. Подождите несколько секунд.",
                 lastMessage().getText());
         verify(gateway, never()).sendInvoice(anyLong(), any(Payment.class));
         assertEquals(InvoiceSendStatus.SENDING, payment.getInvoiceSendStatus());
@@ -257,6 +277,47 @@ class TelegramUpdateHandlerTest {
 
         verify(gateway, times(1)).sendInvoice(10L, payment);
         verify(payments, times(1)).markInvoiceSent(payment.getId(), operationId);
+    }
+
+    @Test
+    void confirmedInvalidAmountReleasesClaimAndShowsSpecificMessage() throws Exception {
+        Payment payment = payment(InvoiceSendStatus.SENDING);
+        java.util.UUID operationId = java.util.UUID.randomUUID();
+        payment.setInvoiceOperationId(operationId);
+        when(payments.createPaymentAndClaimInvoice(1L, "seller"))
+                .thenReturn(new PaymentService.InvoiceClaim(payment, operationId,
+                        PaymentService.InvoiceClaimResult.CLAIMED));
+        doThrow(new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
+                "Telegram rejected invoice", 400, "Bad Request: CURRENCY_TOTAL_AMOUNT_INVALID",
+                new IllegalStateException("telegram response")))
+                .when(gateway).sendInvoice(10L, payment);
+
+        handler.handle(callback("pay"));
+
+        assertEquals("Не удалось создать счёт из-за некорректной суммы оплаты. Попробуйте позже или обратитесь к администратору.",
+                lastMessage().getText());
+        verify(payments).failInvoiceSending(payment.getId(), operationId,
+                "Telegram invoice rejected: Bad Request: CURRENCY_TOTAL_AMOUNT_INVALID");
+        verify(payments, never()).markInvoiceUnknown(any(), any());
+        verify(payments, times(1)).createPaymentAndClaimInvoice(1L, "seller");
+    }
+
+    @Test
+    void ambiguousInvoiceFailureStillRequiresReconciliation() {
+        Payment payment = payment(InvoiceSendStatus.SENDING);
+        java.util.UUID operationId = java.util.UUID.randomUUID();
+        payment.setInvoiceOperationId(operationId);
+        when(payments.createPaymentAndClaimInvoice(1L, "seller"))
+                .thenReturn(new PaymentService.InvoiceClaim(payment, operationId,
+                        PaymentService.InvoiceClaimResult.CLAIMED));
+        doThrow(new ru.murad.yourmarket.exception.TelegramPublicationException(
+                "Ambiguous invoice result", new java.net.SocketTimeoutException("timeout")))
+                .when(gateway).sendInvoice(10L, payment);
+
+        handler.handle(callback("pay"));
+
+        verify(payments).markInvoiceUnknown(payment.getId(), operationId);
+        verify(payments, never()).failInvoiceSending(any(), any(), anyString());
     }
 
     private Update update(String text) {

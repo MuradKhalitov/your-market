@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-stars-refund-operation
+      author: codex
+      changes:
+        - addColumn:
+            tableName: payments
+            columns:
+              - column: {name: refund_operation_id, type: uuid}
+              - column: {name: refund_started_at, type: timestamptz}
+      rollback:
+        - dropColumn: {tableName: payments, columnName: refund_operation_id}
+        - dropColumn: {tableName: payments, columnName: refund_started_at}

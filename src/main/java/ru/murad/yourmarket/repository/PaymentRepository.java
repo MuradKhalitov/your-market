@@ -8,10 +8,13 @@ import java.util.*;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByPayload(String payload);
-    Optional<Payment> findByAdvertisementId(UUID advertisementId);
+    List<Payment> findByAdvertisementIdOrderByCreatedAtDesc(UUID advertisementId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Payment p where p.advertisementId = :advertisementId")
-    Optional<Payment> findByAdvertisementIdForUpdate(@Param("advertisementId") UUID advertisementId);
+    @Query("select p from Payment p where p.advertisementId = :advertisementId order by p.createdAt desc")
+    List<Payment> findByAdvertisementIdForUpdate(@Param("advertisementId") UUID advertisementId);
+    default Optional<Payment> findByAdvertisementId(UUID advertisementId) {
+        return findByAdvertisementIdOrderByCreatedAtDesc(advertisementId).stream().findFirst();
+    }
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id")
     Optional<Payment> findByIdForUpdate(@Param("id") UUID id);

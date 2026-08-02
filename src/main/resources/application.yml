@@ -35,8 +35,7 @@ telegram:
     cleanup-max-batches: ${TELEGRAM_RATE_LIMIT_CLEANUP_MAX_BATCHES:10}
     cleanup-cron: ${TELEGRAM_RATE_LIMIT_CLEANUP_CRON:0 0 3 * * *}
 publication:
-  price: ${PUBLICATION_PRICE:199.00}
-  currency: ${PUBLICATION_CURRENCY:RUB}
+  price-stars: ${PUBLICATION_PRICE_STARS:1}
   moderation-enabled: ${PUBLICATION_MODERATION_ENABLED:false}
   lifetime-days: ${PUBLICATION_LIFETIME_DAYS:30}
   expiration-cron: "${PUBLICATION_EXPIRATION_CRON:0 0 * * * *}"

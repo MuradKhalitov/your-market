@@ -39,7 +39,7 @@ public class TelegramProperties {
 
     @Getter @Setter @NoArgsConstructor public static class Bot {@NotBlank private String username="";@NotBlank private String token="";public Bot(String username,String token){this.username=username;this.token=token;}public String username(){return username;}public String token(){return token;}}
     @Getter @Setter @NoArgsConstructor public static class Channel {@NotBlank @Pattern(regexp="^-100\\d+$") private String id="";@NotBlank private String username="";@NotBlank @URL private String url="";public Channel(String id,String username,String url){this.id=id;this.username=username;this.url=url;}public String id(){return id;}public String username(){return username;}public String url(){return url;}}
-    @Getter @Setter @NoArgsConstructor public static class Payment {@NotBlank private String providerToken="";public Payment(String providerToken){this.providerToken=providerToken;}public String providerToken(){return providerToken;}}
+    @Getter @Setter @NoArgsConstructor public static class Payment {private String providerToken="";public Payment(String providerToken){this.providerToken=providerToken;}public String providerToken(){return providerToken;}}
     @Getter @Setter @NoArgsConstructor public static class Moderation {private String chatId="";public Moderation(String chatId){this.chatId=chatId;}public String chatId(){return chatId;}}
     @Getter @Setter @NoArgsConstructor public static class Admin {private List<Long> userIds=new ArrayList<>();public Admin(List<Long> userIds){this.userIds=userIds;}public List<Long> userIds(){return userIds;}}
     @Getter @Setter @NoArgsConstructor public static class RateLimit {

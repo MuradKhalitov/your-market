@@ -49,6 +49,8 @@ public class TelegramUpdateHandler {
     private final RateLimitService rateLimitService;
     private final ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository draftPhotoRepository;
     private final StartCommandParser startCommandParser;
+    private final CurrencyAmountConverter currencyAmountConverter;
+    private final TelegramMessageProvider messages;
 
     public void handle(Update update) {
         if (update == null) {
@@ -128,6 +130,9 @@ public class TelegramUpdateHandler {
         if (startAction == StartCommandParser.StartAction.PUBLISH) { startOrResume(chatId, from); return; }
         if (startAction == StartCommandParser.StartAction.MAIN_MENU) { mainMenu(chatId); return; }
         if (isCommand(value, "/menu")) { menuCommand(chatId, userId); return; }
+        if (isCommand(value, "/terms")) { send(chatId, messages.terms(publication.getPriceStars()), keyboards.mainMenu()); return; }
+        if (isCommand(value, "/paysupport")) { send(chatId, messages.paymentSupport(), keyboards.mainMenu()); return; }
+        if (isCommand(value, "/support")) { send(chatId, messages.support(), keyboards.mainMenu()); return; }
         if (TelegramKeyboardFactory.CANCEL_CREATION.equals(value)) { cancelCreation(chatId, userId); return; }
         if (TelegramKeyboardFactory.PHOTOS_DONE.equals(value)) {
             AdvertisementDraft draft = draftService.finishPhotos(userId);
@@ -263,9 +268,9 @@ public class TelegramUpdateHandler {
         PaymentService.InvoiceClaim claim = paymentService.createPaymentAndClaimInvoice(from.getId(), from.getUserName());
         if (!claim.sendAllowed()) {
             String message = switch (claim.result()) {
-                case ALREADY_SENT -> "Счёт уже был отправлен в этот чат выше. Найдите сообщение с кнопкой „Оплатить“. Новый счёт не создавался.";
-                case IN_PROGRESS -> "Счёт уже формируется. Подождите несколько секунд и проверьте сообщения в этом чате.";
-                case UNKNOWN -> "Не удалось однозначно определить, был ли счёт отправлен. Новый платёж не создавался. Проверьте сообщения выше или обратитесь к администратору.";
+                case ALREADY_SENT -> "Счёт на " + publication.getPriceStars() + " ⭐ уже был отправлен в этот чат выше. Найдите сообщение с кнопкой оплаты.";
+                case IN_PROGRESS -> "Счёт на оплату формируется. Подождите несколько секунд.";
+                case UNKNOWN -> "Не удалось определить, был ли счёт отправлен. Новый счёт не создавался. Обратитесь в поддержку.";
                 case CLAIMED -> throw new IllegalStateException("Захваченный invoice должен быть отправлен");
             };
             send(chatId, message, keyboards.mainMenu());
@@ -275,8 +280,30 @@ public class TelegramUpdateHandler {
             gateway.sendInvoice(chatId, claim.payment());
             paymentService.markInvoiceSent(claim.payment().getId(), claim.operationId());
         } catch (ru.murad.yourmarket.exception.TelegramConfirmedFailureException ex) {
-            try { paymentService.releaseInvoiceClaim(claim.payment().getId(), claim.operationId()); }
-            catch (RuntimeException releaseError) { log.error("Не удалось освободить invoice claim paymentId={}", claim.payment().getId(), releaseError); }
+            Integer minorUnits = null;
+            try {
+                minorUnits = currencyAmountConverter.toMinorUnits(
+                        claim.payment().getAmount(), claim.payment().getCurrency());
+            } catch (IllegalArgumentException amountError) {
+                log.warn("Некорректная локальная сумма invoice paymentId={}, advertisementId={}",
+                        claim.payment().getId(), claim.payment().getAdvertisementId());
+            }
+            log.error("Telegram отклонил invoice paymentId={}, advertisementId={}, currency={}, amount={}, minorUnits={}, operationId={}, telegramErrorCode={}, telegramDescription={}",
+                    claim.payment().getId(), claim.payment().getAdvertisementId(), claim.payment().getCurrency(),
+                    claim.payment().getAmount(), minorUnits, claim.operationId(), ex.getErrorCode(),
+                    ex.getApiDescription(), ex);
+            try {
+                paymentService.failInvoiceSending(claim.payment().getId(), claim.operationId(),
+                        "Telegram invoice rejected: " + (ex.getApiDescription() == null
+                                ? "confirmed failure" : ex.getApiDescription()));
+            } catch (RuntimeException releaseError) {
+                log.error("Не удалось освободить invoice claim paymentId={}, operationId={}",
+                        claim.payment().getId(), claim.operationId(), releaseError);
+            }
+            if (ex.isCurrencyTotalAmountInvalid()) {
+                send(chatId, "Не удалось создать счёт из-за некорректной суммы оплаты. Попробуйте позже или обратитесь к администратору.", keyboards.mainMenu());
+                return;
+            }
             throw ex;
         } catch (RuntimeException ex) {
             try { paymentService.markInvoiceUnknown(claim.payment().getId(), claim.operationId()); }
@@ -359,7 +386,8 @@ public class TelegramUpdateHandler {
         if (publication.isModerationEnabled()) {
             if (current.status() == AdvertisementStatus.WAITING_FOR_MODERATION)
                 moderationService.submit(result.advertisementId());
-            send(message.getChatId(), "✅ Оплата принята. Объявление отправлено на модерацию", keyboards.mainMenu());
+            send(message.getChatId(), "Оплата " + publication.getPriceStars()
+                    + " ⭐ получена. Объявление отправлено на модерацию.", keyboards.mainMenu());
             return;
         }
         if (current.status() == AdvertisementStatus.PUBLISHED || current.status() == AdvertisementStatus.REJECTED
@@ -386,11 +414,11 @@ public class TelegramUpdateHandler {
 
 
     private void preview(AdvertisementDraft d) {
-        String caption = "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 Город: %s\nКатегория: %s\n\n%s\n\n👤 Продавец: %s\n\nСтоимость публикации: %s ₽"
+        String caption = "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 Город: %s\nКатегория: %s\n\n%s\n\n👤 Продавец: %s\n\nСтоимость публикации: %s ⭐"
                 .formatted(d.getCategory().getEmoji(), TelegramGatewayImpl.html(d.getTitle()),
                         TelegramGatewayImpl.price(d.getItemPrice()), TelegramGatewayImpl.html(d.getCity()),
                         d.getCategory().getDisplayName(), TelegramGatewayImpl.html(d.getDescription()),
-                        TelegramGatewayImpl.html(d.getContact()), publication.getPrice().toPlainString());
+                        TelegramGatewayImpl.html(d.getContact()), publication.getPriceStars());
         try {
             var photos = draftPhotoRepository.findByDraftIdOrderByPosition(d.getId());
             if (photos.size() > 1) {
@@ -426,7 +454,7 @@ public class TelegramUpdateHandler {
 
     private void mainMenu(Long chatId) {
         send(chatId, "Добро пожаловать в YourMarket!\n\nЗдесь вы можете разместить объявление\nв нашем Telegram-канале.\n\nСтоимость публикации: "
-                + publication.getPrice().toPlainString() + " ₽", keyboards.mainMenu());
+                + publication.getPriceStars() + " ⭐", keyboards.mainMenu());
     }
 
     private void creationPrompt(Long chatId, String text) {

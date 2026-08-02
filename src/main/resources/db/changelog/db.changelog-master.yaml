@@ -13,3 +13,7 @@ databaseChangeLog:
       file: db/changelog/changes/006-safe-channel-position-constraint.yaml
   - include:
       file: db/changelog/changes/007-configuration-and-expiration-safety.yaml
+  - include:
+      file: db/changelog/changes/008-telegram-stars-payments.yaml
+  - include:
+      file: db/changelog/changes/009-stars-refund-operation.yaml

@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-stars-payments
+      author: codex
+      preConditions:
+        onFail: HALT
+        onError: HALT
+        tableExists:
+          tableName: payments
+      changes:
+        - dropUniqueConstraint:
+            tableName: payments
+            constraintName: payments_advertisement_id_key
+        - sql:
+            splitStatements: false
+            sql: >-
+              ALTER TABLE payments
+              ADD CONSTRAINT chk_payments_amount_positive CHECK (amount > 0)
+        - sql:
+            splitStatements: false
+            sql: >-
+              CREATE UNIQUE INDEX ux_payments_one_active_per_advertisement
+              ON payments (advertisement_id)
+              WHERE status IN ('CREATED', 'PRE_CHECKOUT_APPROVED')
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: DROP INDEX IF EXISTS ux_payments_one_active_per_advertisement
+        - dropUniqueConstraint:
+            tableName: payments
+            constraintName: chk_payments_amount_positive
+        - addUniqueConstraint:
+            tableName: payments
+            columnNames: advertisement_id
+            constraintName: payments_advertisement_id_key
