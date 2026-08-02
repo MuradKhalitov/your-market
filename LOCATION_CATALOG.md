@@ -1,16 +1,7 @@
 # Location catalog
 
-`location-catalog.yaml` is the only runtime source. It is loaded locally with a safe YAML parser; the bot neither downloads nor parses GAR at startup.
+`src/main/resources/location-catalog.yaml` is a project product catalogue, built and reviewed like `vehicle-catalog.yaml`. It contains popular regions and cities with stable codes, display names, `popular` and `sortOrder`; the first ten entries are a product ordering.
 
-The current file is explicitly a **bootstrap**, not an official GAR import: `source=BOOTSTRAP_NO_GAR_ARCHIVE`, `sourceVersion=not-generated`. It contains 10 priority regions and 37 cities. Dagestan, Chechnya and Ingushetia are first; their current bootstrap city lists are respectively 10, 6 and 5 entries. Supply an official GAR XML archive to produce the complete catalogue before production rollout.
+It is deliberately not a complete official directory of Russia and has no GAR/FIAS metadata, importer, external API or runtime download. Changes are made by pull request. Rare cities, villages, settlements, auls and stanitsas are entered through «Другой населённый пункт» inside the selected region.
 
-Snapshots (`regionNameSnapshot`, `cityNameSnapshot`) protect old listings. `customLocality` is retained as raw text and escaped only for Telegram HTML. Legacy `city` is retained for older rows as a display fallback; no legacy value is guessed into a structured location.
-
-After importing GAR, review the deterministic YAML diff, its reported region/city totals, source version and removed/renamed objects. Do not commit GAR archives. To audit legacy data before tightening policy:
-
-```sql
-SELECT count(*) FROM advertisements WHERE city IS NOT NULL AND region_code IS NULL;
-SELECT count(*) FROM advertisement_drafts WHERE city IS NOT NULL AND region_code IS NULL;
-```
-
-Rollback is the Git revert of the generated YAML plus Liquibase rollback in a controlled migration window; do not delete legacy advertisements automatically.
+Snapshots are copied to the draft and advertisement. `LocationFormatter` uses those snapshots; legacy `city` remains only as a fallback for rows created before the structured location rollout.

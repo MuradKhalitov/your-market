@@ -22,9 +22,6 @@ public class LocationCatalog {
             if (input == null) throw new IllegalStateException("location-catalog.yaml is missing");
             LoaderOptions options = new LoaderOptions(); options.setMaxAliasesForCollections(20); options.setCodePointLimit(2_000_000);
             Map<String, Object> root = new Yaml(new SafeConstructor(options)).load(input);
-            Map<String, Object> metadata = map(root, "metadata", "metadata");
-            if (text(metadata, "source").isBlank() || text(metadata, "sourceVersion").isBlank() || text(metadata, "generatedAt").isBlank() || text(metadata, "generatorVersion").isBlank())
-                throw new IllegalStateException("location catalog metadata is incomplete");
             Object raw = root.get("regions"); if (!(raw instanceof List<?> list)) throw new IllegalStateException("location catalog regions is required");
             List<Region> parsed = new ArrayList<>(); for (Object item : list) parsed.add(region((Map<String, Object>) item)); validate(parsed);
             regions = sortRegions(parsed);
@@ -44,6 +41,5 @@ public class LocationCatalog {
     private List<Region> sortRegions(List<Region> x){return x.stream().sorted(Comparator.comparing(Region::popular).reversed().thenComparingInt(Region::sortOrder).thenComparing(Region::name,String.CASE_INSENSITIVE_ORDER)).toList();}
     private List<City> sortCities(List<City> x){return x.stream().sorted(Comparator.comparing(City::popular).reversed().thenComparingInt(City::sortOrder).thenComparing(City::name,String.CASE_INSENSITIVE_ORDER)).toList();}
     private String query(String q){String v=q==null?"":q.trim();if(v.length()<2||v.length()>60||v.chars().anyMatch(Character::isISOControl))throw new IllegalArgumentException("Введите от 2 до 60 символов для поиска.");return v.toLowerCase(Locale.ROOT);}
-    @SuppressWarnings("unchecked") private Map<String,Object> map(Map<String,Object> x,String key,String label){Object v=x==null?null:x.get(key);if(!(v instanceof Map<?,?>))throw new IllegalStateException("location catalog "+label+" is required");return (Map<String,Object>)v;}
     private String text(Map<String,Object>x,String key){Object v=x.get(key);return v instanceof String s?s.trim():"";} private int number(Map<String,Object>x,String key){Object v=x.get(key);return v instanceof Number n?n.intValue():-1;}
 }
