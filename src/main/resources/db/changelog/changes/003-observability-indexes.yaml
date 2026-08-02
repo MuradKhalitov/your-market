@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-observability-indexes
+      author: yourmarket
+      changes:
+        - createIndex:
+            tableName: advertisements
+            indexName: idx_advertisements_moderation_recovery
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: moderation_submission_status
+              - column:
+                  name: moderation_sending_since
+      rollback:
+        - dropIndex:
+            tableName: advertisements
+            indexName: idx_advertisements_moderation_recovery

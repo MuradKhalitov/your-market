@@ -19,7 +19,8 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
 class AdvertisementPublicationServiceTest {
     private final PublicationTransactionService transactions = mock(PublicationTransactionService.class);
     private final TelegramGateway telegram = mock(TelegramGateway.class);
-    private final AdvertisementPublicationServiceImpl service = new AdvertisementPublicationServiceImpl(transactions, telegram);
+    private final AdvertisementPublicationServiceImpl service = new AdvertisementPublicationServiceImpl(transactions, telegram,
+            mock(OperationalMetrics.class));
     private final UUID advertisementId = UUID.randomUUID();
     private final UUID operationId = UUID.randomUUID();
     private final Advertisement advertisement = Advertisement.builder().id(advertisementId).build();

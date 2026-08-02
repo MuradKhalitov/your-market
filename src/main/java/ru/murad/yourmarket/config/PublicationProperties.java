@@ -24,4 +24,6 @@ public class PublicationProperties {
     private int deletionClaimTimeoutSeconds = 180;
     @Positive
     private int expirationClaimTimeoutSeconds = 600;
+    @Positive
+    private int refundClaimTimeoutSeconds = 600;
 }

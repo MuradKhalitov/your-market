@@ -60,6 +60,7 @@ class PaymentServiceTest {
     AdvertisementPhotoRepository adPhotos = mock(AdvertisementPhotoRepository.class);
     AdvertisementMapper mapper = mock(AdvertisementMapper.class);
     PublicationProperties publication = publicationProperties(false);
+    OperationalMetrics metrics = mock(OperationalMetrics.class);
     PaymentServiceImpl service = new PaymentServiceImpl(
         drafts,
         advertisements,
@@ -68,7 +69,8 @@ class PaymentServiceTest {
         draftPhotos,
         adPhotos,
         mapper,
-        publication
+        publication,
+        metrics
     );
 
     @Test
@@ -293,7 +295,8 @@ class PaymentServiceTest {
             draftPhotos,
             adPhotos,
             mapper,
-                publicationProperties(true)
+                publicationProperties(true),
+                metrics
         );
 
         moderated.processSuccessfulPayment(request());

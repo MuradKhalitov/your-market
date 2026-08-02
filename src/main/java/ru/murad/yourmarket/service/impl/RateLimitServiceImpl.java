@@ -10,7 +10,7 @@ import java.time.Instant;
 
 @Slf4j @Service @RequiredArgsConstructor
 public class RateLimitServiceImpl implements RateLimitService {
-    private final JdbcTemplate jdbc; private final TelegramProperties properties;
+    private final JdbcTemplate jdbc; private final TelegramProperties properties; private final ru.murad.yourmarket.service.OperationalMetrics metrics;
     public boolean allow(Long userId,String action) {
         var cfg=properties.rateLimit(); if(!cfg.enabled()) return true;
         Instant boundary=Instant.now().minusSeconds(cfg.windowSeconds());
@@ -23,7 +23,7 @@ public class RateLimitServiceImpl implements RateLimitService {
             RETURNING action_count
             """,Integer.class,userId,action,Timestamp.from(boundary),Timestamp.from(boundary));
         boolean allowed=count!=null&&count<=cfg.maxActions();
-        if(!allowed) log.warn("Rate limit rejected telegramUserId={}, actionType={}",userId,action);
+        if(!allowed) { metrics.rateLimitRejected(); log.warn("Rate limit rejected telegramUserId={}, actionType={}",userId,action); }
         return allowed;
     }
     @Override public int cleanupExpired() {

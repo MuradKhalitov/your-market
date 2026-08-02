@@ -32,12 +32,14 @@ import ru.murad.yourmarket.model.Payment;
 import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
+import ru.murad.yourmarket.service.OperationalMetrics;
 
 class TelegramPublicationKeyboardTest {
     private final TelegramClient client = mock(TelegramClient.class);
     private final AdvertisementPhotoRepository photos = mock(AdvertisementPhotoRepository.class);
     private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(),
-            new TelegramKeyboardFactory(new PublicationProperties()), photos);
+            new TelegramKeyboardFactory(new PublicationProperties()), photos, mock(OperationalMetrics.class),
+            new TelegramErrorClassifier());
 
     @Test
     void starsInvoiceUsesStarsWithoutMinorUnitConversion() throws Exception {

@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-advertisement-category-constraint
+      author: yourmarket
+      preConditions:
+        - onFail: HALT
+        - onError: HALT
+        - sqlCheck:
+            expectedResult: "0"
+            sql: "SELECT count(*) FROM advertisements WHERE category NOT IN ('AUTO','REAL_ESTATE','ELECTRONICS','CLOTHING','HOME','SERVICES','ANIMALS','HOBBY_SPORT','OTHER')"
+        - sqlCheck:
+            expectedResult: "0"
+            sql: "SELECT count(*) FROM advertisement_drafts WHERE category IS NOT NULL AND category NOT IN ('AUTO','REAL_ESTATE','ELECTRONICS','CLOTHING','HOME','SERVICES','ANIMALS','HOBBY_SPORT','OTHER')"
+      changes:
+        - sql:
+            sql: "ALTER TABLE advertisements ADD CONSTRAINT chk_advertisements_category_code CHECK (category IN ('AUTO','REAL_ESTATE','ELECTRONICS','CLOTHING','HOME','SERVICES','ANIMALS','HOBBY_SPORT','OTHER'))"
+        - sql:
+            sql: "ALTER TABLE advertisement_drafts ADD CONSTRAINT chk_advertisement_drafts_category_code CHECK (category IS NULL OR category IN ('AUTO','REAL_ESTATE','ELECTRONICS','CLOTHING','HOME','SERVICES','ANIMALS','HOBBY_SPORT','OTHER'))"
+      rollback:
+        - sql:
+            sql: "ALTER TABLE advertisements DROP CONSTRAINT chk_advertisements_category_code"
+        - sql:
+            sql: "ALTER TABLE advertisement_drafts DROP CONSTRAINT chk_advertisement_drafts_category_code"

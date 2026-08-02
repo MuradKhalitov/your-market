@@ -5,6 +5,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.*;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import java.util.*;
 
 @Component
@@ -51,6 +52,20 @@ public class TelegramKeyboardFactory {
                 callback("❌ Отменить", "cancel"));
     }
 
+    public InlineKeyboardMarkup categorySelection() {
+        List<InlineKeyboardRow> rows = new ArrayList<>();
+        List<AdvertisementCategory> categories = List.of(AdvertisementCategory.values());
+        for (int index = 0; index < categories.size(); index += 2) {
+            AdvertisementCategory first = categories.get(index);
+            if (index + 1 == categories.size()) {
+                rows.add(new InlineKeyboardRow(categoryButton(first)));
+            } else {
+                rows.add(new InlineKeyboardRow(categoryButton(first), categoryButton(categories.get(index + 1))));
+            }
+        }
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
     public InlineKeyboardMarkup editMenu() {
         return InlineKeyboardMarkup.builder().keyboard(List.of(
                 new InlineKeyboardRow(callback("Категория", "edit:CATEGORY"), callback("Название", "edit:TITLE")),
@@ -94,6 +109,10 @@ public class TelegramKeyboardFactory {
 
     private InlineKeyboardButton callback(String text, String data) {
         return InlineKeyboardButton.builder().text(text).callbackData(data).build();
+    }
+
+    private InlineKeyboardButton categoryButton(AdvertisementCategory category) {
+        return callback(category.displayLabel(), "ad:category:" + category.name());
     }
 
     private InlineKeyboardButton url(String text, String value) {

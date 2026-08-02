@@ -14,6 +14,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
+        max-file: "${DOCKER_LOG_MAX_FILE:-5}"
+    mem_limit: ${POSTGRES_MEM_LIMIT:-512m}
+    cpus: ${POSTGRES_CPUS:-1.0}
     networks:
       - yourmarket-network
 
@@ -50,6 +57,13 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: ${DOCKER_LOG_MAX_SIZE:-10m}
+        max-file: "${DOCKER_LOG_MAX_FILE:-5}"
+    mem_limit: ${APP_MEM_LIMIT:-768m}
+    cpus: ${APP_CPUS:-1.0}
     networks:
       - yourmarket-network
 

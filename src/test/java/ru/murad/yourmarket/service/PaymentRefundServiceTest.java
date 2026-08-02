@@ -4,11 +4,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ru.murad.yourmarket.service.impl.PaymentRefundServiceImpl;
 import ru.murad.yourmarket.telegram.TelegramGateway;
+import ru.murad.yourmarket.exception.TelegramPublicationException;
 
 class PaymentRefundServiceTest {
     private final PaymentRefundTransactionService transactions = mock(PaymentRefundTransactionService.class);
@@ -37,5 +39,21 @@ class PaymentRefundServiceTest {
         service.refundStarPayment(paymentId);
 
         verify(gateway, never()).refundStarPayment(10L, "telegram-charge");
+    }
+
+    @Test
+    void ambiguousRefundFailureRequiresReconciliationInsteadOfRelease() {
+        UUID paymentId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        when(transactions.claim(paymentId)).thenReturn(new PaymentRefundTransactionService.RefundClaim(
+                paymentId, operationId, 10L, "telegram-charge", true));
+        doThrow(new TelegramPublicationException("network timeout", null))
+                .when(gateway).refundStarPayment(10L, "telegram-charge");
+
+        org.junit.jupiter.api.Assertions.assertThrows(TelegramPublicationException.class,
+                () -> service.refundStarPayment(paymentId));
+
+        verify(transactions).markReconciliationRequired(paymentId, operationId, "network timeout");
+        verify(transactions, never()).release(paymentId, operationId);
     }
 }

@@ -21,4 +21,5 @@ public interface AdvertisementRepository extends JpaRepository<Advertisement, UU
             AdvertisementStatus status, Instant expiresAt);
     List<Advertisement> findTop100ByStatusAndPublicationUpdatedAtLessThanEqualOrderByPublicationUpdatedAtAsc(AdvertisementStatus status,Instant time);
     List<Advertisement> findTop100ByStatusAndExpirationStartedAtLessThanEqualOrderByExpirationStartedAtAsc(AdvertisementStatus status,Instant time);
+    List<Advertisement> findTop100ByStatusOrderByCreatedAtAsc(AdvertisementStatus status);
 }

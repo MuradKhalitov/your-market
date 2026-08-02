@@ -30,12 +30,14 @@ import org.telegram.telegrambots.meta.api.objects.User;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.murad.yourmarket.config.PublicationProperties;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.model.AdvertisementDraft;
 import ru.murad.yourmarket.model.Payment;
 import ru.murad.yourmarket.model.enums.AdvertisementCreationStep;
+import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import ru.murad.yourmarket.model.enums.InvoiceSendStatus;
 import ru.murad.yourmarket.model.enums.PaymentStatus;
 import ru.murad.yourmarket.service.AdvertisementDraftService;
@@ -131,8 +133,70 @@ class TelegramUpdateHandlerTest {
         when(drafts.findActive(1L)).thenReturn(Optional.empty());
         when(drafts.startCreation(1L, 10L)).thenReturn(draft);
         handler.handle(update(TelegramKeyboardFactory.CREATE));
-        ReplyKeyboardMarkup keyboard = sentReplyKeyboard();
+        ReplyKeyboardMarkup keyboard = firstReplyKeyboard();
         assertEquals(List.of(TelegramKeyboardFactory.CANCEL_CREATION), rowTexts(keyboard, 0));
+    }
+
+    @Test
+    void creationStartsWithAllCategoryButtonsAndStableCallbackCodes() throws Exception {
+        AdvertisementDraft draft = draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
+        when(drafts.findActive(1L)).thenReturn(Optional.empty());
+        when(drafts.startCreation(1L, 10L)).thenReturn(draft);
+
+        handler.handle(update(TelegramKeyboardFactory.CREATE));
+
+        InlineKeyboardMarkup keyboard = categoryKeyboard();
+        List<String> callbackData = keyboard.getKeyboard().stream().flatMap(List::stream)
+                .map(button -> button.getCallbackData()).toList();
+        assertEquals(AdvertisementCategory.values().length, callbackData.size());
+        assertTrue(callbackData.contains("ad:category:AUTO"));
+        assertTrue(callbackData.contains("ad:category:REAL_ESTATE"));
+        assertTrue(callbackData.stream().allMatch(value -> value.startsWith("ad:category:")));
+    }
+
+    @Test
+    void categoryCallbackStoresStableCodeAndMovesExactlyOneStep() throws Exception {
+        AdvertisementDraft current = draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
+        AdvertisementDraft updated = draft(AdvertisementCreationStep.WAITING_FOR_TITLE);
+        when(drafts.findActive(1L)).thenReturn(Optional.of(current));
+        when(drafts.setCategory(1L, AdvertisementCategory.AUTO)).thenReturn(updated);
+
+        handler.handle(callback("ad:category:AUTO"));
+
+        verify(drafts).setCategory(1L, AdvertisementCategory.AUTO);
+        assertTrue(lastMessage().getText().contains("Авто"));
+        assertTrue(lastMessage().getText().contains("Шаг 2 из 7"));
+    }
+
+    @Test
+    void realEstateCallbackUsesEnumCodeInsteadOfButtonText() {
+        when(drafts.findActive(1L)).thenReturn(Optional.of(draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY)));
+        when(drafts.setCategory(1L, AdvertisementCategory.REAL_ESTATE))
+                .thenReturn(draft(AdvertisementCreationStep.WAITING_FOR_TITLE));
+
+        handler.handle(callback("ad:category:REAL_ESTATE"));
+
+        verify(drafts).setCategory(1L, AdvertisementCategory.REAL_ESTATE);
+    }
+
+    @Test
+    void repeatedOrOldCategoryCallbackDoesNotChangeDraftAgain() {
+        when(drafts.findActive(1L)).thenReturn(Optional.of(draft(AdvertisementCreationStep.WAITING_FOR_TITLE)));
+
+        handler.handle(callback("ad:category:AUTO"));
+
+        verify(drafts, never()).setCategory(anyLong(), any());
+    }
+
+    @Test
+    void textAtCategoryStepIsRejectedAndKeyboardIsShownAgain() throws Exception {
+        when(drafts.findActive(1L)).thenReturn(Optional.of(draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY)));
+
+        handler.handle(update("Авто"));
+
+        verify(drafts, never()).setCategory(anyLong(), any());
+        assertEquals(AdvertisementCategory.values().length, categoryKeyboard().getKeyboard().stream()
+                .flatMap(List::stream).count());
     }
 
     @Test
@@ -362,6 +426,16 @@ class TelegramUpdateHandlerTest {
 
     private ReplyKeyboardMarkup sentReplyKeyboard() throws Exception {
         return (ReplyKeyboardMarkup) lastMessage().getReplyMarkup();
+    }
+
+    private ReplyKeyboardMarkup firstReplyKeyboard() throws Exception {
+        return messages().getAllValues().stream().map(SendMessage::getReplyMarkup)
+                .filter(ReplyKeyboardMarkup.class::isInstance).map(ReplyKeyboardMarkup.class::cast).findFirst().orElseThrow();
+    }
+
+    private InlineKeyboardMarkup categoryKeyboard() throws Exception {
+        return messages().getAllValues().stream().map(SendMessage::getReplyMarkup)
+                .filter(InlineKeyboardMarkup.class::isInstance).map(InlineKeyboardMarkup.class::cast).findFirst().orElseThrow();
     }
 
     private ArgumentCaptor<SendMessage> messages() throws Exception {

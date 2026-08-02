@@ -1,3 +1,9 @@
 databaseChangeLog:
   - include:
       file: db/changelog/changes/001-stars-baseline.yaml
+  - include:
+      file: db/changelog/changes/002-production-readiness.yaml
+  - include:
+      file: db/changelog/changes/003-observability-indexes.yaml
+  - include:
+      file: db/changelog/changes/004-advertisement-category-constraint.yaml

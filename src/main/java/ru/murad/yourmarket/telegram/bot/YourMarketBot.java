@@ -8,6 +8,7 @@ import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.telegram.handler.TelegramUpdateHandler;
+import ru.murad.yourmarket.service.OperationalMetrics;
 import java.util.List;
 
 @Component
@@ -16,6 +17,7 @@ import java.util.List;
 public class YourMarketBot implements SpringLongPollingBot, LongPollingUpdateConsumer {
     private final TelegramProperties properties;
     private final TelegramUpdateHandler handler;
+    private final OperationalMetrics metrics;
 
     @Override public String getBotToken() { return properties.bot().token(); }
     @Override public LongPollingUpdateConsumer getUpdatesConsumer() { return this; }
@@ -29,7 +31,9 @@ public class YourMarketBot implements SpringLongPollingBot, LongPollingUpdateCon
             }
             try {
                 handler.handle(update);
+                metrics.successfulUpdate();
             } catch (RuntimeException ex) {
+                metrics.updateFailure();
                 log.error("Ошибка обработки Telegram updateId={}; остальные события batch будут продолжены",
                         update.getUpdateId(), ex);
             }

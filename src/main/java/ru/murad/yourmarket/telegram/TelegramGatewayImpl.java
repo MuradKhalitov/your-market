@@ -19,6 +19,7 @@ import java.text.*;
 import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
+import ru.murad.yourmarket.service.OperationalMetrics;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +29,8 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final TelegramProperties telegram;
     private final TelegramKeyboardFactory keyboards;
     private final AdvertisementPhotoRepository photoRepository;
+    private final OperationalMetrics metrics;
+    private final TelegramErrorClassifier errorClassifier;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -64,6 +67,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
             Message message = client.execute(builder.build());
             return List.of(message.getMessageId());
         } catch (Exception ex) {
+            metrics.telegramError(errorClassifier.classify(ex));
             throw new TelegramPublicationException("Не удалось опубликовать объявление", ex);
         }
     }
@@ -73,6 +77,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
         try {
             client.execute(DeleteMessage.builder().chatId(telegram.channel().id()).messageId(messageId).build());
         } catch (Exception ex) {
+            metrics.telegramError(errorClassifier.classify(ex));
             if (ex instanceof org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException request
                     && Integer.valueOf(400).equals(request.getErrorCode()) && request.getApiResponse() != null
                     && request.getApiResponse().toLowerCase(java.util.Locale.ROOT).contains("message to delete not found"))
@@ -100,6 +105,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
                     .needShippingAddress(false).isFlexible(false);
             client.execute(builder.build());
         } catch (Exception ex) {
+            metrics.telegramError(errorClassifier.classify(ex));
             if (ex instanceof org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException request)
                 throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
                         "Telegram rejected invoice", request.getErrorCode(), request.getApiResponse(), request);
@@ -112,7 +118,12 @@ public class TelegramGatewayImpl implements TelegramGateway {
         try {
             client.execute(RefundStarPayment.builder().userId(userId)
                     .telegramPaymentChargeId(telegramPaymentChargeId).build());
+        } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException exception) {
+            metrics.telegramError(errorClassifier.classify(exception));
+            throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
+                    "Telegram rejected Stars refund", exception.getErrorCode(), exception.getApiResponse(), exception);
         } catch (Exception exception) {
+            metrics.telegramError(errorClassifier.classify(exception));
             throw new TelegramPublicationException("Не удалось выполнить возврат Telegram Stars", exception);
         }
     }
@@ -122,6 +133,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
         try {
             client.execute(SendMessage.builder().chatId(chatId).text(text).build());
         } catch (Exception ex) {
+            metrics.telegramError(errorClassifier.classify(ex));
             throw new TelegramPublicationException("Не удалось отправить сообщение", ex);
         }
     }

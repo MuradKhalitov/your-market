@@ -19,10 +19,11 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.telegram.bot.YourMarketBot;
 import ru.murad.yourmarket.telegram.handler.TelegramUpdateHandler;
+import ru.murad.yourmarket.service.OperationalMetrics;
 
 class YourMarketBotTest {
     private final TelegramUpdateHandler handler = mock(TelegramUpdateHandler.class);
-    private final YourMarketBot bot = new YourMarketBot(properties(), handler);
+    private final YourMarketBot bot = new YourMarketBot(properties(), handler, mock(OperationalMetrics.class));
 
     @Test
     void messageBatchIsDelivered() {
@@ -78,6 +79,9 @@ class YourMarketBotTest {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(TelegramProperties.class, YourMarketBotTest::properties);
             context.registerBean(TelegramUpdateHandler.class, () -> handler);
+            context.registerBean(io.micrometer.core.instrument.MeterRegistry.class,
+                    io.micrometer.core.instrument.simple.SimpleMeterRegistry::new);
+            context.registerBean(OperationalMetrics.class);
             context.register(YourMarketBot.class);
             context.refresh();
 

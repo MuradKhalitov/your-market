@@ -28,6 +28,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final AdvertisementPhotoRepository photoRepository;
     private final AdvertisementMapper mapper;
     private final PublicationProperties properties;
+    private final ru.murad.yourmarket.service.OperationalMetrics metrics;
 
     @Override @Transactional
     public InvoiceClaim createPaymentAndClaimInvoice(Long userId, String username) {
@@ -110,6 +111,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void logClaim(Payment payment, UUID operationId, InvoiceClaimResult result) {
+        metrics.invoiceClaim(result.name());
         log.info("Invoice claim paymentId={}, advertisementId={}, invoiceSendStatus={}, operationId={}, result={}",
                 payment.getId(), payment.getAdvertisementId(), payment.getInvoiceSendStatus(), operationId, result);
     }

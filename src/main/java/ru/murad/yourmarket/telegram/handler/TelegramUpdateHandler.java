@@ -9,6 +9,7 @@ import org.telegram.telegrambots.meta.api.objects.*;
 import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.payments.*;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.murad.yourmarket.config.*;
@@ -165,8 +166,7 @@ public class TelegramUpdateHandler {
         Long userId = message.getFrom().getId();
         switch (draft.getStep()) {
             case WAITING_FOR_CATEGORY -> {
-                AdvertisementCategory category = parseCategory(text(message));
-                continueAfterValue(draftService.setCategory(userId, category), "Шаг 2 из 7 — название\nВведите название (3–150 символов):", message.getFrom());
+                sendCategoryPrompt(message.getChatId());
             }
             case WAITING_FOR_TITLE -> {
                 continueAfterValue(draftService.setTitle(userId, text(message)), "Шаг 3 из 7 — описание\nВведите описание (10–2000 символов):", message.getFrom());
@@ -219,6 +219,7 @@ public class TelegramUpdateHandler {
         userService.registerOrUpdate(from.getId(), chatId, from.getUserName(), from.getFirstName());
         String data = callback.getData();
         if ("cancel".equals(data)) cancelCreation(chatId, from.getId());
+        else if (data != null && data.startsWith("ad:category:")) handleCategoryCallback(callback, chatId);
         else if ("edit:menu".equals(data)) send(chatId, "Что изменить?", keyboards.editMenu());
         else if ("edit:preview".equals(data)) draftService.findActive(from.getId()).ifPresent(this::preview);
         else if (data.startsWith("edit:")) {
@@ -318,7 +319,7 @@ public class TelegramUpdateHandler {
 
     private void promptForStep(AdvertisementDraft draft, String username) {
         switch (draft.getStep()) {
-            case WAITING_FOR_CATEGORY -> creationPrompt(draft.getChatId(), categoryPrompt());
+            case WAITING_FOR_CATEGORY -> sendCategoryPrompt(draft.getChatId());
             case WAITING_FOR_TITLE -> creationPrompt(draft.getChatId(), "Шаг 2 из 7 — название\nВведите название (3–150 символов):");
             case WAITING_FOR_DESCRIPTION -> creationPrompt(draft.getChatId(), "Шаг 3 из 7 — описание\nВведите описание (10–2000 символов):");
             case WAITING_FOR_PRICE -> creationPrompt(draft.getChatId(), "Шаг 4 из 7 — цена\nВведите цену товара:");
@@ -328,12 +329,40 @@ public class TelegramUpdateHandler {
             case WAITING_FOR_CONTACT_CHOICE -> contactPrompt(draft.getChatId(), username);
             case WAITING_FOR_CUSTOM_CONTACT -> creationPrompt(draft.getChatId(), "Шаг 7 из 7 — контакт\nВведите контакт для связи:");
             case PREVIEW -> preview(draft);
-            default -> creationPrompt(draft.getChatId(), categoryPrompt());
+            default -> sendCategoryPrompt(draft.getChatId());
         }
     }
 
     private String categoryPrompt() {
-        return "Шаг 1 из 7 — категория\nВведите категорию: Электроника, Авто, Дом и быт, Одежда, Игры или Другое.";
+        return "Шаг 1 из 7 — категория\nВыберите категорию объявления:";
+    }
+
+    private void sendCategoryPrompt(Long chatId) {
+        send(chatId, "Создание объявления: выберите категорию кнопкой ниже.", keyboards.creationNavigation(true));
+        sendInline(chatId, categoryPrompt(), keyboards.categorySelection());
+    }
+
+    private void handleCategoryCallback(CallbackQuery callback, Long chatId) {
+        Long userId = callback.getFrom().getId();
+        AdvertisementDraft draft = draftService.findActive(userId).orElse(null);
+        if (draft == null || draft.getStep() != AdvertisementCreationStep.WAITING_FOR_CATEGORY) {
+            send(chatId, "Этот шаг уже завершён. Продолжите заполнение объявления ниже.",
+                    keyboards.creationNavigation(false));
+            return;
+        }
+        String code = callback.getData().substring("ad:category:".length());
+        AdvertisementCategory category = AdvertisementCategory.fromCode(code).orElse(null);
+        if (category == null) {
+            send(chatId, "Неизвестная категория. Выберите вариант с помощью кнопок ниже.",
+                    keyboards.creationNavigation(true));
+            sendInline(chatId, categoryPrompt(), keyboards.categorySelection());
+            return;
+        }
+        AdvertisementDraft updated = draftService.setCategory(userId, category);
+        send(chatId, "Категория: " + category.displayLabel()
+                + "\n\nШаг 2 из 7 — название\nТеперь отправьте название объявления.",
+                keyboards.creationNavigation(false));
+        log.info("Selected advertisement category telegramUserId={}, category={}", userId, category.name());
     }
     private String photoPrompt() {
         return "Шаг 5 из 7 — фотографии\nОтправьте от 1 до 5 фотографий.\nПосле загрузки нажмите “✅ Готово”.";
@@ -344,15 +373,6 @@ public class TelegramUpdateHandler {
         creationPrompt(chatId, "Шаг 7 из 7 — контакт\nВведите контакт для связи." + suggestion);
     }
 
-    private AdvertisementCategory parseCategory(String value) {
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        return Arrays.stream(AdvertisementCategory.values())
-                .filter(c -> normalized.equals(c.name().toLowerCase(Locale.ROOT))
-                        || normalized.equals(c.getDisplayName().toLowerCase(Locale.ROOT))
-                        || normalized.equals((c.getEmoji() + " " + c.getDisplayName()).toLowerCase(Locale.ROOT)))
-                .findFirst().orElseThrow(() -> new DraftValidationException(
-                        "Выберите категорию: Электроника, Авто, Дом и быт, Одежда, Игры или Другое."));
-    }
 
     private void menuCommand(Long chatId, Long userId) {
         if (draftService.findActive(userId).isPresent()) {
@@ -477,6 +497,13 @@ public class TelegramUpdateHandler {
             if (keyboard != null) builder.replyMarkup(keyboard);
             client.execute(builder.build());
         } catch (Exception ex) { throw new IllegalStateException("Не удалось отправить сообщение", ex); }
+    }
+    private void sendInline(Long chatId, String text, InlineKeyboardMarkup keyboard) {
+        try {
+            client.execute(SendMessage.builder().chatId(chatId).text(text).replyMarkup(keyboard).build());
+        } catch (Exception ex) {
+            throw new IllegalStateException("Не удалось отправить сообщение", ex);
+        }
     }
     private void answerCallback(String id) {
         try { client.execute(AnswerCallbackQuery.builder().callbackQueryId(id).build()); }

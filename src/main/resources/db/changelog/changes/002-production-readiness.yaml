@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-refund-recovery-index
+      author: yourmarket
+      changes:
+        - createIndex:
+            tableName: payments
+            indexName: idx_payments_refund_recovery
+            columns:
+              - column: {name: status}
+              - column: {name: refund_started_at}
+      rollback:
+        - dropIndex:
+            tableName: payments
+            indexName: idx_payments_refund_recovery

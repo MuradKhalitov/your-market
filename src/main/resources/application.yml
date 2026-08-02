@@ -49,6 +49,18 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    group:
+      liveness:
+        include: livenessState
+      readiness:
+        include: readinessState,db
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId:-none}] [%X{telegramUserId:-}] [%X{advertisementId:-}] %logger{36} - %msg%n"

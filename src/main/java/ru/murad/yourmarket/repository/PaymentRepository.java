@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import ru.murad.yourmarket.model.Payment;
 import java.util.*;
+import java.time.Instant;
+import ru.murad.yourmarket.model.enums.PaymentStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByPayload(String payload);
@@ -22,4 +24,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.payload = :payload")
     Optional<Payment> findByPayloadForUpdate(@Param("payload") String payload);
+
+    List<Payment> findTop100ByStatusAndRefundStartedAtLessThanEqualOrderByRefundStartedAtAsc(
+            PaymentStatus status, Instant startedAt);
 }

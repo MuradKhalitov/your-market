@@ -52,7 +52,7 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
     "spring.jpa.hibernate.ddl-auto=validate",
     "spring.autoconfigure.exclude=org.telegram.telegrambots.longpolling.starter.TelegramBotStarterConfiguration"
 })
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class LiquibasePostgresIntegrationTest {
 
     @Container
@@ -253,6 +253,23 @@ class LiquibasePostgresIntegrationTest {
                 .currency("USD").status(PaymentStatus.CREATED).invoiceSendStatus(InvoiceSendStatus.NOT_SENT).build();
 
         assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> repository.saveAndFlush(invalidPayment));
+    }
+
+    @Test
+    void schemaStoresCategoryAsCodeAndRejectsUnknownCode() {
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
+                INSERT INTO advertisement_drafts
+                (id, telegram_user_id, chat_id, step, category, edit_mode, created_at, updated_at)
+                VALUES (?, ?, ?, 'WAITING_FOR_CATEGORY', 'NOT_A_CATEGORY', false, now(), now())
+                """, UUID.randomUUID(), 990001L, 990001L));
+
+        jdbcTemplate.update("""
+                INSERT INTO advertisement_drafts
+                (id, telegram_user_id, chat_id, step, category, edit_mode, created_at, updated_at)
+                VALUES (?, ?, ?, 'WAITING_FOR_TITLE', 'REAL_ESTATE', false, now(), now())
+                """, UUID.randomUUID(), 990002L, 990002L);
+        assertEquals("REAL_ESTATE", jdbcTemplate.queryForObject(
+                "SELECT category FROM advertisement_drafts WHERE telegram_user_id = ?", String.class, 990002L));
     }
 
     private void prepareCompleteDraft(long userId) {
