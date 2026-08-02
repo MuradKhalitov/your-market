@@ -21,6 +21,7 @@ import ru.murad.yourmarket.model.enums.*;
 import ru.murad.yourmarket.service.*;
 import ru.murad.yourmarket.telegram.*;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
+import ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -51,6 +52,9 @@ public class TelegramUpdateHandler {
     private final ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository draftPhotoRepository;
     private final StartCommandParser startCommandParser;
     private final TelegramMessageProvider messages;
+    private final VehicleDraftFlowService vehicleFlow;
+    private final VehicleKeyboardFactory vehicleKeyboards;
+    private final VehicleDetailsFormatter vehicleFormatter;
 
     public void handle(Update update) {
         if (update == null) {
@@ -168,6 +172,17 @@ public class TelegramUpdateHandler {
             case WAITING_FOR_CATEGORY -> {
                 sendCategoryPrompt(message.getChatId());
             }
+            case WAITING_FOR_VEHICLE_BRAND -> vehicleBrandPrompt(message.getChatId());
+            case WAITING_FOR_VEHICLE_BRAND_SEARCH -> vehicleBrandSearch(message.getChatId(), userId, text(message));
+            case WAITING_FOR_CUSTOM_VEHICLE_BRAND -> vehicleModelCustomPrompt(message.getChatId(), vehicleFlow.setCustomBrand(userId, text(message)));
+            case WAITING_FOR_VEHICLE_MODEL -> vehicleModelPrompt(message.getChatId(), userId);
+            case WAITING_FOR_VEHICLE_MODEL_SEARCH -> vehicleModelSearch(message.getChatId(), userId, text(message));
+            case WAITING_FOR_CUSTOM_VEHICLE_MODEL -> vehicleYearPrompt(message.getChatId(), vehicleFlow.setCustomModel(userId, text(message)));
+            case WAITING_FOR_VEHICLE_YEAR -> vehicleTransmissionPrompt(message.getChatId(), vehicleFlow.setYear(userId, text(message)));
+            case WAITING_FOR_VEHICLE_TRANSMISSION -> vehicleTransmissionPrompt(message.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_ENGINE_TYPE -> vehicleEnginePrompt(message.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_ENGINE_VOLUME -> vehicleMileagePrompt(message.getChatId(), vehicleFlow.setEngineVolume(userId, text(message)));
+            case WAITING_FOR_VEHICLE_MILEAGE -> vehicleDrivePrompt(message.getChatId(), vehicleFlow.setMileage(userId, text(message)));
             case WAITING_FOR_TITLE -> {
                 continueAfterValue(draftService.setTitle(userId, text(message)), "Шаг 3 из 7 — описание\nВведите описание (10–2000 символов):", message.getFrom());
             }
@@ -220,6 +235,7 @@ public class TelegramUpdateHandler {
         String data = callback.getData();
         if ("cancel".equals(data)) cancelCreation(chatId, from.getId());
         else if (data != null && data.startsWith("ad:category:")) handleCategoryCallback(callback, chatId);
+        else if (data != null && data.startsWith("ad:auto:")) handleVehicleCallback(callback, chatId);
         else if ("edit:menu".equals(data)) send(chatId, "Что изменить?", keyboards.editMenu());
         else if ("edit:preview".equals(data)) draftService.findActive(from.getId()).ifPresent(this::preview);
         else if (data.startsWith("edit:")) {
@@ -320,6 +336,18 @@ public class TelegramUpdateHandler {
     private void promptForStep(AdvertisementDraft draft, String username) {
         switch (draft.getStep()) {
             case WAITING_FOR_CATEGORY -> sendCategoryPrompt(draft.getChatId());
+            case WAITING_FOR_VEHICLE_BRAND -> vehicleBrandPrompt(draft.getChatId());
+            case WAITING_FOR_VEHICLE_BRAND_SEARCH -> send(draft.getChatId(), "Введите название или несколько букв марки автомобиля:", keyboards.creationNavigation(false));
+            case WAITING_FOR_CUSTOM_VEHICLE_BRAND -> send(draft.getChatId(), "Введите марку автомобиля:", keyboards.creationNavigation(false));
+            case WAITING_FOR_VEHICLE_MODEL -> vehicleModelPrompt(draft.getChatId(), draft.getTelegramUserId());
+            case WAITING_FOR_VEHICLE_MODEL_SEARCH -> send(draft.getChatId(), "Введите название или несколько букв модели:", keyboards.creationNavigation(false));
+            case WAITING_FOR_CUSTOM_VEHICLE_MODEL -> send(draft.getChatId(), "Введите модель автомобиля:", keyboards.creationNavigation(false));
+            case WAITING_FOR_VEHICLE_YEAR -> vehicleYearPrompt(draft.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_TRANSMISSION -> vehicleTransmissionPrompt(draft.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_ENGINE_TYPE -> vehicleEnginePrompt(draft.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_ENGINE_VOLUME -> send(draft.getChatId(), "Введите объём двигателя в литрах, например 2.0:", keyboards.creationNavigation(false));
+            case WAITING_FOR_VEHICLE_MILEAGE -> vehicleMileagePrompt(draft.getChatId(), draft);
+            case WAITING_FOR_VEHICLE_DRIVE_TYPE -> vehicleDrivePrompt(draft.getChatId(), draft);
             case WAITING_FOR_TITLE -> creationPrompt(draft.getChatId(), "Шаг 2 из 7 — название\nВведите название (3–150 символов):");
             case WAITING_FOR_DESCRIPTION -> creationPrompt(draft.getChatId(), "Шаг 3 из 7 — описание\nВведите описание (10–2000 символов):");
             case WAITING_FOR_PRICE -> creationPrompt(draft.getChatId(), "Шаг 4 из 7 — цена\nВведите цену товара:");
@@ -359,11 +387,61 @@ public class TelegramUpdateHandler {
             return;
         }
         AdvertisementDraft updated = draftService.setCategory(userId, category);
+        if (updated.getStep() == AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND) {
+            send(chatId, "Категория: " + category.displayLabel() + "\n\nТеперь выберите марку автомобиля.",
+                    keyboards.creationNavigation(false));
+            vehicleBrandPrompt(chatId);
+            return;
+        }
         send(chatId, "Категория: " + category.displayLabel()
                 + "\n\nШаг 2 из 7 — название\nТеперь отправьте название объявления.",
                 keyboards.creationNavigation(false));
         log.info("Selected advertisement category telegramUserId={}, category={}", userId, category.name());
     }
+    private void handleVehicleCallback(CallbackQuery callback, Long chatId) {
+        Long userId = callback.getFrom().getId();
+        String data = callback.getData();
+        draftService.findActive(userId)
+                .filter(draft -> Objects.equals(draft.getChatId(), chatId) && draft.getCategory() == AdvertisementCategory.AUTO)
+                .orElseThrow(() -> new DraftValidationException("Этот выбор автомобиля не принадлежит активному черновику."));
+        if ("ad:auto:page".equals(data)) return;
+        if (data.startsWith("ad:auto:bp:")) { vehicleBrandPrompt(chatId, page(data, "ad:auto:bp:")); return; }
+        if (data.startsWith("ad:auto:mp:")) { vehicleModelPrompt(chatId, userId, page(data, "ad:auto:mp:")); return; }
+        if ("ad:auto:bs".equals(data)) { vehicleFlow.beginBrandSearch(userId); send(chatId, "Введите название или несколько букв марки автомобиля:", keyboards.creationNavigation(false)); return; }
+        if ("ad:auto:ms".equals(data)) { vehicleFlow.beginModelSearch(userId); send(chatId, "Введите название или несколько букв модели:", keyboards.creationNavigation(false)); return; }
+        if ("ad:auto:brands".equals(data)) { vehicleFlow.backToBrands(userId); vehicleBrandPrompt(chatId); return; }
+        if ("ad:auto:models".equals(data)) { vehicleModelPrompt(chatId, userId); return; }
+        if (data.startsWith("ad:auto:sb:")) { vehicleModelPrompt(chatId, userId, vehicleFlow.setBrandSearchResult(userId, data.substring(11))); return; }
+        if (data.startsWith("ad:auto:sm:")) { vehicleYearPrompt(chatId, vehicleFlow.chooseModel(userId, data.substring(11))); return; }
+        if (data.startsWith("ad:auto:b:")) { AdvertisementDraft draft = vehicleFlow.chooseBrand(userId, data.substring(10)); if (draft.getStep() == AdvertisementCreationStep.WAITING_FOR_CUSTOM_VEHICLE_BRAND) send(chatId, "Введите марку автомобиля:", keyboards.creationNavigation(false)); else vehicleModelPrompt(chatId, userId, draft); return; }
+        if (data.startsWith("ad:auto:m:")) { AdvertisementDraft draft = vehicleFlow.chooseModel(userId, data.substring(10)); if (draft.getStep() == AdvertisementCreationStep.WAITING_FOR_CUSTOM_VEHICLE_MODEL) send(chatId, "Введите модель автомобиля:", keyboards.creationNavigation(false)); else vehicleYearPrompt(chatId, draft); return; }
+        if (data.startsWith("ad:auto:t:")) { vehicleEnginePrompt(chatId, vehicleFlow.setTransmission(userId, enumValue(TransmissionType.class, data.substring(10)))); return; }
+        if (data.startsWith("ad:auto:e:")) { AdvertisementDraft draft = vehicleFlow.setEngineType(userId, enumValue(EngineType.class, data.substring(10))); if (draft.getStep() == AdvertisementCreationStep.WAITING_FOR_VEHICLE_MILEAGE) vehicleMileagePrompt(chatId, draft); else send(chatId, "Введите объём двигателя в литрах, например 2.0:", keyboards.creationNavigation(false)); return; }
+        if (data.startsWith("ad:auto:d:")) { vehicleFlow.setDriveType(userId, enumValue(DriveType.class, data.substring(10))); send(chatId, "Характеристики автомобиля сохранены. Теперь отправьте название объявления.", keyboards.creationNavigation(false)); return; }
+        throw new DraftValidationException("Неизвестное действие выбора автомобиля.");
+    }
+
+    private <T extends Enum<T>> T enumValue(Class<T> type, String code) { try { return Enum.valueOf(type, code); } catch (IllegalArgumentException ex) { throw new DraftValidationException("Неизвестное значение. Выберите вариант кнопкой."); } }
+    private int page(String data, String prefix) { try { return Math.max(0, Integer.parseInt(data.substring(prefix.length()))); } catch (RuntimeException ex) { throw new DraftValidationException("Некорректная страница каталога."); } }
+    private void vehicleBrandPrompt(Long chatId) { vehicleBrandPrompt(chatId, 0); }
+    private void vehicleBrandPrompt(Long chatId, int page) { sendInline(chatId, "Выберите марку автомобиля:", vehicleKeyboards.brands(page)); }
+    private void vehicleModelPrompt(Long chatId, Long userId) { vehicleModelPrompt(chatId, userId, 0); }
+    private void vehicleModelPrompt(Long chatId, Long userId, AdvertisementDraft ignored) { vehicleModelPrompt(chatId, userId, 0); }
+    private void vehicleModelPrompt(Long chatId, Long userId, int page) {
+        String brand = vehicleFlow.find(userId).map(VehicleDraftDetails::getBrandCode)
+                .orElseThrow(() -> new DraftValidationException("Сначала выберите марку автомобиля."));
+        if ("OTHER".equals(brand)) send(chatId, "Введите модель автомобиля:", keyboards.creationNavigation(false));
+        else sendInline(chatId, "Выберите модель автомобиля:", vehicleKeyboards.models(brand, page));
+    }
+    private void vehicleBrandSearch(Long chatId, Long userId, String query) { if (query.trim().length() < 2 || query.trim().length() > 40) throw new DraftValidationException("Введите от 2 до 40 символов для поиска марки."); sendInline(chatId, "Выберите марку из результатов поиска:", vehicleKeyboards.brandSearch(query)); }
+    private void vehicleModelSearch(Long chatId, Long userId, String query) { if (query.trim().length() < 2 || query.trim().length() > 40) throw new DraftValidationException("Введите от 2 до 40 символов для поиска модели."); String brand = vehicleFlow.find(userId).map(VehicleDraftDetails::getBrandCode).orElseThrow(() -> new DraftValidationException("Сначала выберите марку автомобиля.")); sendInline(chatId, "Выберите модель из результатов поиска:", vehicleKeyboards.modelSearch(brand, query)); }
+    private void vehicleYearPrompt(Long chatId, AdvertisementDraft ignored) { send(chatId, "Введите год выпуска автомобиля, например 2018:", keyboards.creationNavigation(false)); }
+    private void vehicleModelCustomPrompt(Long chatId, AdvertisementDraft ignored) { send(chatId, "Введите модель автомобиля:", keyboards.creationNavigation(false)); }
+    private void vehicleTransmissionPrompt(Long chatId, AdvertisementDraft ignored) { sendInline(chatId, "Выберите коробку передач:", vehicleKeyboards.transmission()); }
+    private void vehicleEnginePrompt(Long chatId, AdvertisementDraft ignored) { sendInline(chatId, "Выберите тип двигателя:", vehicleKeyboards.engine()); }
+    private void vehicleMileagePrompt(Long chatId, AdvertisementDraft ignored) { send(chatId, "Введите пробег в километрах, например 85000:", keyboards.creationNavigation(false)); }
+    private void vehicleDrivePrompt(Long chatId, AdvertisementDraft ignored) { sendInline(chatId, "Выберите привод:", vehicleKeyboards.drive()); }
+
     private String photoPrompt() {
         return "Шаг 5 из 7 — фотографии\nОтправьте от 1 до 5 фотографий.\nПосле загрузки нажмите “✅ Готово”.";
     }
@@ -437,6 +515,10 @@ public class TelegramUpdateHandler {
                         TelegramGatewayImpl.price(d.getItemPrice()), TelegramGatewayImpl.html(d.getCity()),
                         d.getCategory().getDisplayName(), TelegramGatewayImpl.html(d.getDescription()),
                         TelegramGatewayImpl.html(d.getContact()), publication.getPriceStars());
+        if (d.getCategory() == AdvertisementCategory.AUTO) {
+            String vehicle = vehicleFlow.find(d.getTelegramUserId()).map(vehicleFormatter::format).orElse("");
+            if (!vehicle.isBlank()) caption += "\n\n" + vehicle;
+        }
         try {
             var photos = draftPhotoRepository.findByDraftIdOrderByPosition(d.getId());
             if (photos.size() > 1) {

@@ -29,6 +29,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final AdvertisementMapper mapper;
     private final PublicationProperties properties;
     private final ru.murad.yourmarket.service.OperationalMetrics metrics;
+    private final ru.murad.yourmarket.service.VehicleDetailsService vehicleDetailsService;
 
     @Override @Transactional
     public InvoiceClaim createPaymentAndClaimInvoice(Long userId, String username) {
@@ -53,6 +54,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         Advertisement advertisement = mapper.toAdvertisement(draft, username);
         advertisement = advertisementRepository.save(advertisement);
+        vehicleDetailsService.copyToAdvertisement(draft, advertisement);
         var draftPhotos = draftPhotoRepository.findByDraftIdOrderByPosition(draft.getId());
         if (draftPhotos.isEmpty() && draft.getTelegramFileId() != null) {
             photoRepository.save(AdvertisementPhoto.builder().advertisementId(advertisement.getId())

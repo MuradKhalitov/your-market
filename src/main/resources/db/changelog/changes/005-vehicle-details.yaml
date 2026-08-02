@@ -1,0 +1,58 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-vehicle-details
+      author: yourmarket
+      changes:
+        - createTable:
+            tableName: vehicle_draft_details
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_draft_id, type: uuid, constraints: {nullable: false, unique: true}}
+              - column: {name: brand_code, type: varchar(40)}
+              - column: {name: brand_name_snapshot, type: varchar(80)}
+              - column: {name: custom_brand, type: varchar(40)}
+              - column: {name: model_code, type: varchar(40)}
+              - column: {name: model_name_snapshot, type: varchar(80)}
+              - column: {name: custom_model, type: varchar(60)}
+              - column: {name: production_year, type: integer}
+              - column: {name: transmission, type: varchar(20)}
+              - column: {name: engine_type, type: varchar(20)}
+              - column: {name: engine_volume_liters, type: "numeric(3,1)"}
+              - column: {name: mileage_km, type: integer}
+              - column: {name: drive_type, type: varchar(10)}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - addForeignKeyConstraint: {baseTableName: vehicle_draft_details, baseColumnNames: advertisement_draft_id, referencedTableName: advertisement_drafts, referencedColumnNames: id, constraintName: fk_vehicle_draft_details_draft, onDelete: CASCADE}
+        - createTable:
+            tableName: vehicle_details
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false, unique: true}}
+              - column: {name: brand_code, type: varchar(40), constraints: {nullable: false}}
+              - column: {name: brand_name_snapshot, type: varchar(80), constraints: {nullable: false}}
+              - column: {name: custom_brand, type: varchar(40)}
+              - column: {name: model_code, type: varchar(40), constraints: {nullable: false}}
+              - column: {name: model_name_snapshot, type: varchar(80), constraints: {nullable: false}}
+              - column: {name: custom_model, type: varchar(60)}
+              - column: {name: production_year, type: integer, constraints: {nullable: false}}
+              - column: {name: transmission, type: varchar(20), constraints: {nullable: false}}
+              - column: {name: engine_type, type: varchar(20), constraints: {nullable: false}}
+              - column: {name: engine_volume_liters, type: "numeric(3,1)"}
+              - column: {name: mileage_km, type: integer, constraints: {nullable: false}}
+              - column: {name: drive_type, type: varchar(10), constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - addForeignKeyConstraint: {baseTableName: vehicle_details, baseColumnNames: advertisement_id, referencedTableName: advertisements, referencedColumnNames: id, constraintName: fk_vehicle_details_advertisement, onDelete: CASCADE}
+        - sql:
+            sql: |
+              ALTER TABLE vehicle_details ADD CONSTRAINT chk_vehicle_details_values
+              CHECK (production_year BETWEEN 1900 AND 2100
+                AND mileage_km BETWEEN 0 AND 3000000
+                AND transmission IN ('AUTOMATIC','MANUAL','CVT','ROBOT')
+                AND engine_type IN ('PETROL','DIESEL','LPG','HYBRID','ELECTRIC')
+                AND drive_type IN ('FRONT','REAR','AWD')
+                AND ((engine_type='ELECTRIC' AND engine_volume_liters IS NULL)
+                  OR (engine_type<>'ELECTRIC' AND engine_volume_liters > 0 AND engine_volume_liters <= 10.0)))
+      rollback:
+        - dropTable: {tableName: vehicle_details}
+        - dropTable: {tableName: vehicle_draft_details}

@@ -16,7 +16,8 @@ class AdvertisementDraftServiceTest {
     ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository photos = mock(ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository.class);
     ru.murad.yourmarket.repository.AdvertisementRepository ads = mock(ru.murad.yourmarket.repository.AdvertisementRepository.class);
     ru.murad.yourmarket.repository.PaymentRepository payments = mock(ru.murad.yourmarket.repository.PaymentRepository.class);
-    AdvertisementDraftServiceImpl service = new AdvertisementDraftServiceImpl(repository, photos, ads, payments);
+    ru.murad.yourmarket.repository.VehicleDraftDetailsRepository vehicles = mock(ru.murad.yourmarket.repository.VehicleDraftDetailsRepository.class);
+    AdvertisementDraftServiceImpl service = new AdvertisementDraftServiceImpl(repository, photos, ads, payments, vehicles);
 
     @Test
     void startsCreation() {
@@ -28,12 +29,24 @@ class AdvertisementDraftServiceTest {
     }
 
     @Test
+    void cancellingDraftRemovesVehicleDetailsBeforeDraft() {
+        AdvertisementDraft draft = AdvertisementDraft.builder().id(java.util.UUID.randomUUID()).telegramUserId(1L).build();
+        when(repository.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
+
+        service.cancel(1L);
+
+        var order = inOrder(vehicles, repository);
+        order.verify(vehicles).deleteByAdvertisementDraftId(draft.getId());
+        order.verify(repository).deleteByTelegramUserId(1L);
+    }
+
+    @Test
     void movesBetweenSteps() {
         AdvertisementDraft draft = draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
         when(repository.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
         when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
         service.setCategory(1L, AdvertisementCategory.AUTO);
-        assertEquals(AdvertisementCreationStep.WAITING_FOR_TITLE, draft.getStep());
+        assertEquals(AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND, draft.getStep());
         assertEquals(AdvertisementCategory.AUTO, draft.getCategory());
     }
 

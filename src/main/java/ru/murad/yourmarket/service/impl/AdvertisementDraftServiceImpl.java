@@ -23,13 +23,14 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
     private final ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository photoRepository;
     private final ru.murad.yourmarket.repository.AdvertisementRepository advertisementRepository;
     private final ru.murad.yourmarket.repository.PaymentRepository paymentRepository;
+    private final ru.murad.yourmarket.repository.VehicleDraftDetailsRepository vehicleDetailsRepository;
 
     @Override
     public AdvertisementDraft startCreation(Long userId, Long chatId) {
         AdvertisementDraft draft = repository.findByTelegramUserId(userId)
                 .orElseGet(() -> AdvertisementDraft.builder().telegramUserId(userId).chatId(chatId).build());
         draft.setChatId(chatId);
-        if (draft.getId() != null) photoRepository.deleteByDraftId(draft.getId());
+        if (draft.getId() != null) { photoRepository.deleteByDraftId(draft.getId()); vehicleDetailsRepository.deleteByAdvertisementDraftId(draft.getId()); }
         draft.setStep(AdvertisementCreationStep.WAITING_FOR_CATEGORY);
         draft.setCategory(null); draft.setTitle(null); draft.setDescription(null); draft.setItemPrice(null);
         draft.setTelegramFileId(null); draft.setCity(null); draft.setContact(null);
@@ -44,8 +45,10 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
 
     @Override
     public AdvertisementDraft setCategory(Long userId, AdvertisementCategory value) {
+        AdvertisementCreationStep next = value == AdvertisementCategory.AUTO
+                ? AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND : AdvertisementCreationStep.WAITING_FOR_TITLE;
         return update(userId, AdvertisementCreationStep.WAITING_FOR_CATEGORY,
-                d -> d.setCategory(value), AdvertisementCreationStep.WAITING_FOR_TITLE);
+                d -> d.setCategory(value), next);
     }
 
     @Override
@@ -149,6 +152,18 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
         AdvertisementDraft draft = repository.findByTelegramUserId(userId)
                 .orElseThrow(() -> new InvalidAdvertisementStateException("Активный черновик не найден."));
         AdvertisementCreationStep previous = switch (draft.getStep()) {
+            case WAITING_FOR_VEHICLE_BRAND -> AdvertisementCreationStep.WAITING_FOR_CATEGORY;
+            case WAITING_FOR_VEHICLE_BRAND_SEARCH -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND;
+            case WAITING_FOR_CUSTOM_VEHICLE_BRAND -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND;
+            case WAITING_FOR_VEHICLE_MODEL -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_BRAND;
+            case WAITING_FOR_VEHICLE_MODEL_SEARCH -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_MODEL;
+            case WAITING_FOR_CUSTOM_VEHICLE_MODEL -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_MODEL;
+            case WAITING_FOR_VEHICLE_YEAR -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_MODEL;
+            case WAITING_FOR_VEHICLE_TRANSMISSION -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_YEAR;
+            case WAITING_FOR_VEHICLE_ENGINE_TYPE -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_TRANSMISSION;
+            case WAITING_FOR_VEHICLE_ENGINE_VOLUME -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_ENGINE_TYPE;
+            case WAITING_FOR_VEHICLE_MILEAGE -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_ENGINE_TYPE;
+            case WAITING_FOR_VEHICLE_DRIVE_TYPE -> AdvertisementCreationStep.WAITING_FOR_VEHICLE_MILEAGE;
             case WAITING_FOR_TITLE -> AdvertisementCreationStep.WAITING_FOR_CATEGORY;
             case WAITING_FOR_DESCRIPTION -> AdvertisementCreationStep.WAITING_FOR_TITLE;
             case WAITING_FOR_PRICE -> AdvertisementCreationStep.WAITING_FOR_DESCRIPTION;
@@ -181,7 +196,7 @@ public class AdvertisementDraftServiceImpl implements AdvertisementDraftService 
 
     @Override
     public void cancel(Long userId) {
-        repository.findByTelegramUserId(userId).ifPresent(d -> photoRepository.deleteByDraftId(d.getId()));
+        repository.findByTelegramUserId(userId).ifPresent(d -> { photoRepository.deleteByDraftId(d.getId()); vehicleDetailsRepository.deleteByAdvertisementDraftId(d.getId()); });
         repository.deleteByTelegramUserId(userId);
     }
 

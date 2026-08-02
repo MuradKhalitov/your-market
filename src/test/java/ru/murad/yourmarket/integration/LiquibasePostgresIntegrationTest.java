@@ -41,6 +41,7 @@ import ru.murad.yourmarket.service.RateLimitService;
 import ru.murad.yourmarket.service.PaymentService;
 import ru.murad.yourmarket.repository.TelegramUserRepository;
 import ru.murad.yourmarket.repository.AdvertisementDraftRepository;
+import ru.murad.yourmarket.repository.VehicleDraftDetailsRepository;
 import ru.murad.yourmarket.telegram.TelegramGateway;
 
 @SpringBootTest(properties = {
@@ -87,6 +88,8 @@ class LiquibasePostgresIntegrationTest {
     TelegramUserRepository telegramUsers;
     @Autowired
     AdvertisementDraftRepository drafts;
+    @Autowired
+    VehicleDraftDetailsRepository vehicleDraftDetails;
     @MockitoBean
     TelegramGateway telegramGateway;
 
@@ -270,6 +273,34 @@ class LiquibasePostgresIntegrationTest {
                 """, UUID.randomUUID(), 990002L, 990002L);
         assertEquals("REAL_ESTATE", jdbcTemplate.queryForObject(
                 "SELECT category FROM advertisement_drafts WHERE telegram_user_id = ?", String.class, 990002L));
+    }
+
+    @Test
+    void vehicleConstraintsRejectInvalidCombustionVolumeAndKeepElectricVolumeEmpty() {
+        Advertisement ad = advertisements.saveAndFlush(advertisement(AdvertisementStatus.WAITING_FOR_PAYMENT));
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update("""
+                INSERT INTO vehicle_details (id, advertisement_id, brand_code, brand_name_snapshot, model_code, model_name_snapshot,
+                production_year, transmission, engine_type, engine_volume_liters, mileage_km, drive_type, created_at, updated_at)
+                VALUES (?, ?, 'TESLA', 'Tesla', 'MODEL_3', 'Model 3', 2024, 'AUTOMATIC', 'ELECTRIC', 1.0, 10, 'REAR', now(), now())
+                """, UUID.randomUUID(), ad.getId()));
+        Advertisement electric = advertisements.saveAndFlush(advertisement(AdvertisementStatus.WAITING_FOR_PAYMENT));
+        jdbcTemplate.update("""
+                INSERT INTO vehicle_details (id, advertisement_id, brand_code, brand_name_snapshot, model_code, model_name_snapshot,
+                production_year, transmission, engine_type, mileage_km, drive_type, created_at, updated_at)
+                VALUES (?, ?, 'TESLA', 'Tesla', 'MODEL_Y', 'Model Y', 2024, 'AUTOMATIC', 'ELECTRIC', 10, 'AWD', now(), now())
+                """, UUID.randomUUID(), electric.getId());
+    }
+
+    @Test
+    void deletingDraftCascadesVehicleDraftDetailsWithoutOrphan() {
+        AdvertisementDraft draft = drafts.saveAndFlush(AdvertisementDraft.builder().telegramUserId(88100L).chatId(88100L)
+                .step(AdvertisementCreationStep.WAITING_FOR_VEHICLE_MODEL).category(AdvertisementCategory.AUTO).build());
+        vehicleDraftDetails.saveAndFlush(ru.murad.yourmarket.model.VehicleDraftDetails.builder()
+                .advertisementDraftId(draft.getId()).brandCode("TOYOTA").brandNameSnapshot("Toyota").build());
+
+        drafts.deleteById(draft.getId());
+        assertEquals(0, jdbcTemplate.queryForObject("select count(*) from vehicle_draft_details where advertisement_draft_id = ?",
+                Integer.class, draft.getId()));
     }
 
     private void prepareCompleteDraft(long userId) {

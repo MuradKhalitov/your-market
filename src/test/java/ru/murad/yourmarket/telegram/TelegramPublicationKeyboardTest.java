@@ -39,7 +39,7 @@ class TelegramPublicationKeyboardTest {
     private final AdvertisementPhotoRepository photos = mock(AdvertisementPhotoRepository.class);
     private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(),
             new TelegramKeyboardFactory(new PublicationProperties()), photos, mock(OperationalMetrics.class),
-            new TelegramErrorClassifier());
+            new TelegramErrorClassifier(), mock(ru.murad.yourmarket.service.VehicleDetailsService.class));
 
     @Test
     void starsInvoiceUsesStarsWithoutMinorUnitConversion() throws Exception {

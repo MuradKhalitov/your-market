@@ -61,6 +61,7 @@ class PaymentServiceTest {
     AdvertisementMapper mapper = mock(AdvertisementMapper.class);
     PublicationProperties publication = publicationProperties(false);
     OperationalMetrics metrics = mock(OperationalMetrics.class);
+    ru.murad.yourmarket.service.VehicleDetailsService vehicleDetails = mock(ru.murad.yourmarket.service.VehicleDetailsService.class);
     PaymentServiceImpl service = new PaymentServiceImpl(
         drafts,
         advertisements,
@@ -70,7 +71,8 @@ class PaymentServiceTest {
         adPhotos,
         mapper,
         publication,
-        metrics
+        metrics,
+        vehicleDetails
     );
 
     @Test
@@ -296,7 +298,8 @@ class PaymentServiceTest {
             adPhotos,
             mapper,
                 publicationProperties(true),
-                metrics
+                metrics,
+                vehicleDetails
         );
 
         moderated.processSuccessfulPayment(request());

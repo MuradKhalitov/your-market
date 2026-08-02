@@ -7,3 +7,7 @@ databaseChangeLog:
       file: db/changelog/changes/003-observability-indexes.yaml
   - include:
       file: db/changelog/changes/004-advertisement-category-constraint.yaml
+  - include:
+      file: db/changelog/changes/005-vehicle-details.yaml
+  - include:
+      file: db/changelog/changes/006-vehicle-details-consistency.yaml

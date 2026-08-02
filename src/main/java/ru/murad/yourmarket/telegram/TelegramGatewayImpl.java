@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
 import ru.murad.yourmarket.service.OperationalMetrics;
+import ru.murad.yourmarket.service.VehicleDetailsService;
 
 @Component
 @RequiredArgsConstructor
@@ -31,6 +32,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private final AdvertisementPhotoRepository photoRepository;
     private final OperationalMetrics metrics;
     private final TelegramErrorClassifier errorClassifier;
+    private final VehicleDetailsService vehicleDetails;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -52,7 +54,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
                 var media = new java.util.ArrayList<org.telegram.telegrambots.meta.api.objects.media.InputMedia>();
                 for (int i = 0; i < photos.size(); i++) {
                     var builder = InputMediaPhoto.builder().media(photos.get(i).getTelegramFileId());
-                    if (i == 0) builder.caption(channelCaption(ad)).parseMode("HTML");
+                    if (i == 0) builder.caption(renderCaption(ad)).parseMode("HTML");
                     media.add(builder.build());
                 }
                 List<Message> messages = client.execute(SendMediaGroup.builder().chatId(telegram.channel().id()).medias(media).build());
@@ -62,7 +64,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
             SendPhoto.SendPhotoBuilder<?, ?> builder = SendPhoto.builder()
                     .chatId(telegram.channel().id())
                     .photo(new InputFile(fileId))
-                    .caption(channelCaption(ad)).parseMode("HTML");
+                    .caption(renderCaption(ad)).parseMode("HTML");
             if (USERNAME.matcher(ad.getContact()).matches()) builder.replyMarkup(keyboards.seller(ad.getContact()));
             Message message = client.execute(builder.build());
             return List.of(message.getMessageId());
@@ -148,7 +150,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
         if (telegram.moderation().chatId() == null || telegram.moderation().chatId().isBlank())
             throw new TelegramPublicationException("Не настроен чат модерации", null);
         try {
-            String caption = channelCaption(ad) + "\n\nAdvertisement ID: <code>" + ad.getId()
+            String caption = renderCaption(ad) + "\n\nAdvertisement ID: <code>" + ad.getId()
                     + "</code>\nTelegram user ID: <code>" + ad.getTelegramUserId()
                     + "</code>\nОплачено: " + ad.getPaidAt();
             var photos = photoRepository.findByAdvertisementIdOrderByPosition(ad.getId());
@@ -174,6 +176,11 @@ public class TelegramGatewayImpl implements TelegramGateway {
     public void deleteMessage(String chatId, Integer messageId) {
         try { client.execute(DeleteMessage.builder().chatId(chatId).messageId(messageId).build()); }
         catch (Exception ex) { throw new TelegramPublicationException("Не удалось удалить сообщение", ex); }
+    }
+
+    private String renderCaption(Advertisement ad) {
+        String vehicle = java.util.Objects.requireNonNullElse(vehicleDetails.formatForDisplay(ad.getId()), "");
+        return channelCaption(ad) + (vehicle.isBlank() ? "" : "\n\n" + vehicle);
     }
 
     private String channelCaption(Advertisement ad) {

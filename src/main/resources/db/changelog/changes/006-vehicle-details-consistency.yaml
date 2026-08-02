@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-vehicle-details-consistency
+      author: yourmarket
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE vehicle_details ADD CONSTRAINT chk_vehicle_details_identity
+              CHECK (
+                ((brand_code = 'OTHER' AND custom_brand IS NOT NULL AND btrim(custom_brand) <> '')
+                  OR (brand_code <> 'OTHER' AND custom_brand IS NULL))
+                AND ((model_code = 'OTHER' AND custom_model IS NOT NULL AND btrim(custom_model) <> '')
+                  OR (model_code <> 'OTHER' AND custom_model IS NULL))
+                AND btrim(brand_name_snapshot) <> '' AND btrim(model_name_snapshot) <> ''
+              );
+              ALTER TABLE vehicle_draft_details ADD CONSTRAINT chk_vehicle_draft_details_consistency
+              CHECK (
+                (brand_code IS NULL OR (brand_code = 'OTHER' AND (custom_brand IS NULL OR btrim(custom_brand) <> '')) OR (brand_code <> 'OTHER' AND custom_brand IS NULL))
+                AND (model_code IS NULL OR (model_code = 'OTHER' AND (custom_model IS NULL OR btrim(custom_model) <> '')) OR (model_code <> 'OTHER' AND custom_model IS NULL))
+                AND (engine_type IS NULL OR engine_type <> 'ELECTRIC' OR engine_volume_liters IS NULL)
+                AND (production_year IS NULL OR production_year BETWEEN 1900 AND 2100)
+                AND (mileage_km IS NULL OR mileage_km BETWEEN 0 AND 3000000)
+                AND (engine_volume_liters IS NULL OR (engine_volume_liters > 0 AND engine_volume_liters <= 10.0))
+              );
+      rollback:
+        - sql:
+            sql: |
+              ALTER TABLE vehicle_details DROP CONSTRAINT IF EXISTS chk_vehicle_details_identity;
+              ALTER TABLE vehicle_draft_details DROP CONSTRAINT IF EXISTS chk_vehicle_draft_details_consistency;
