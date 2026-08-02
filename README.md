@@ -1,189 +1,89 @@
 # YourMarket
 
-YourMarket — MVP платной Telegram-доски объявлений. Пользователь создаёт объявление в диалоге с ботом, проверяет предпросмотр, оплачивает Telegram Invoice в Telegram Stars, после чего бот публикует фотографию и описание в канале.
+YourMarket — Telegram-доска объявлений на Java 21 и Spring Boot 3. Пользователь создаёт объявление, оплачивает публикацию в Telegram Stars и получает публикацию в канале.
 
-## Архитектура
+## Оплата
 
-Приложение написано на Java 21 и Spring Boot 3. Слои разделены на `controller`, `service`, `repository`, `model`, `dto`, `mapper` и Telegram-адаптер. PostgreSQL хранит пользователей, черновики, объявления и платежи. Схему создаёт Liquibase. Telegram-слой только разбирает `Update` и вызывает сервисы; переходы статусов выполняются транзакционно.
+Публикация поддерживает только Telegram Stars:
 
-Критические операции оплаты и публикации используют блокировки БД и уникальные ограничения. Повторный `SuccessfulPayment`, повторная публикация и повторное удаление безопасны.
+- `PUBLICATION_PRICE_STARS` — целое положительное количество Stars;
+- каждый новый `Payment` хранит `amount` как `integer` и `currency = XTR`;
+- Invoice не содержит provider token и включает ровно одну цену;
+- pre-checkout и successful payment сверяются со snapshot платежа, а не с текущей конфигурацией;
+- `telegramPaymentChargeId` сохраняется для идемпотентного возврата Stars через сервисный слой.
 
-## Сценарий пользователя
+## Конфигурация
 
-1. `/start` открывает главное меню.
-2. «Разместить объявление» запускает сохранённый в БД пошаговый черновик: категория, название, описание, цена, фотография, город и контакт.
-3. Бот показывает предпросмотр. Ошибочный ввод не меняет текущий шаг.
-4. «Оплатить» создаёт объявление и Invoice на стоимость публикации.
-5. Pre-checkout сверяет payload, пользователя, валюту, сумму и статусы с БД.
-6. После `SuccessfulPayment` платёж фиксируется как `SUCCEEDED`, объявление — как `PAID`; затем выполняется публикация.
-7. «Мои объявления» показывает до 10 последних записей. Опубликованное объявление можно снять с канала.
+Скопируйте `.env.example` в локальный секретный файл или настройте переменные в IDE. Обязательны:
 
-## Настройка Telegram Stars
+- `TELEGRAM_BOT_USERNAME`, `TELEGRAM_BOT_TOKEN`;
+- `TELEGRAM_CHANNEL_ID`, `TELEGRAM_CHANNEL_USERNAME`, `TELEGRAM_CHANNEL_URL`;
+- `PUBLICATION_PRICE_STARS` (минимум `1`);
+- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`;
+- `ADMIN_API_KEY` для production.
 
-1. Откройте `@BotFather`, выполните `/newbot`, задайте имя и username, сохраните токен.
-2. Создайте публичный Telegram-канал и задайте ему username.
-3. Добавьте бота администратором с правами публикации и удаления сообщений.
-4. Публикации оплачиваются через Telegram Stars (`XTR`); provider token ЮKassa для этого сценария не нужен.
-5. ID канала можно узнать, переслав сообщение канала боту вроде `@userinfobot`, либо вызвав Bot API `getUpdates` после публикации тестового сообщения. ID супергруппы/канала обычно начинается с `-100`.
-
-Никогда не коммитьте токены. Скопируйте `.env.example` в `.env` и заполните:
-
-- `TELEGRAM_BOT_USERNAME`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHANNEL_ID`
-- `TELEGRAM_CHANNEL_USERNAME`
-- `TELEGRAM_CHANNEL_URL`
-- `PUBLICATION_PRICE_STARS` — целое число Stars, минимум `1`
-- при необходимости `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
-
-Spring Boot сам не читает `.env` при обычном локальном запуске: экспортируйте переменные в оболочку или настройте их в IDE. Альтернатива — скопировать `application-local.yml.example` в игнорируемый `application-local.yml` и запустить с профилем `local`.
+При включённой модерации обязательны `TELEGRAM_MODERATION_CHAT_ID` и `TELEGRAM_ADMIN_USER_IDS`.
 
 ## Локальный запуск
-
-Требуется JDK 21 и Docker.
-
-```bash
-docker compose up -d
-./mvnw spring-boot:run
-```
-
-Windows:
 
 ```powershell
 docker compose up -d
 .\mvnw.cmd spring-boot:run
 ```
 
-Для файла локального профиля добавьте `-Dspring-boot.run.profiles=local`.
-
-Тестовая оплата: создайте объявление, нажмите «Оплатить» и подтвердите оплату в Telegram Stars. Реальные запросы Telegram в автоматических тестах не выполняются.
-
-## Сборка и тесты
+Проверка:
 
 ```powershell
-.\mvnw.cmd test
 .\mvnw.cmd clean verify
 ```
 
-Интеграционный тест поднимает PostgreSQL через Testcontainers и автоматически пропускается, если Docker недоступен.
+Тесты используют PostgreSQL 17 через Testcontainers и не выполняют реальные запросы в Telegram.
 
-## Административный retry
+## Чистая база данных
 
-`POST /api/admin/advertisements/{id}/retry-publication` повторяет публикацию для `PAID` или `PUBLICATION_FAILED` и не дублирует уже `PUBLISHED`.
+Liquibase использует один актуальный baseline `001-stars-baseline.yaml`. Он рассчитан на новую пустую базу данных и не мигрирует прежние схемы оплаты.
 
-Endpoint защищён заголовком `X-Admin-Api-Key`. Значение задаётся через `ADMIN_API_KEY`.
-В production-профиле приложение не запускается с пустым ключом.
+Для безопасного пересоздания локальной тестовой БД остановите приложение, затем:
 
-## Дополнительные возможности
+```powershell
+docker compose down
+docker volume rm yourmarket_postgres_data
+docker compose up -d
+```
 
-Поддерживаются ручная модерация, публикация до пяти фотографий, пользовательский retry,
-автоматическое истечение публикации, PostgreSQL rate limit и API-key для admin endpoint.
-При отклонении модератором возврат оплаты выполняется вручную: автоматический refund через
-ЮKassa в MVP не реализован.
+На VPS перед пересозданием сделайте резервную копию. После подтверждения, что данные не нужны:
 
-## Ограничения MVP
+```bash
+docker compose --env-file .env.prod -f docker-compose.yml down
+docker volume rm yourmarket_postgres_data
+docker compose --env-file .env.prod -f docker-compose.yml up -d
+```
 
-### Ручная сверка публикации
-
-Telegram Bot API не поддерживает idempotency key для отправки сообщения. Если Telegram уже вернул
-`messageId`, но сохранение результата в PostgreSQL завершилось ошибкой, объявление переводится в
-`PUBLICATION_RECONCILIATION_REQUIRED`; автоматический и пользовательский retry блокируются, чтобы не
-создать дубликат. Администратор сначала сверяет канал, затем вызывает защищённый endpoint:
-
-`POST /api/admin/advertisements/{id}/resolve-publication?action=MARK_PUBLISHED&channelMessageId=123`
-
-или, если публикации в канале точно нет:
-
-`POST /api/admin/advertisements/{id}/resolve-publication?action=RETRY_AFTER_VERIFICATION`
-
-Оба вызова требуют заголовок `X-Admin-Api-Key`.
-
-Invoice с неоднозначным результатом отправки получает состояние `SEND_UNKNOWN` и автоматически не
-отправляется повторно. После ручной проверки администратор может вызвать защищённый endpoint
-`POST /api/admin/advertisements/payments/{paymentId}/resolve-invoice?retryAllowed=true|false`.
-
-Промежуточный прогресс публикации и модерации сохраняется после каждого успешного Telegram-вызова.
-Неоднозначные операции переходят в reconciliation и не повторяют уже отправленные media group.
-
-- один бот, один канал и одна фиксированная цена публикации;
-- от одной до пяти фотографий; поля можно редактировать до создания Invoice;
-- нет возвратов и автоматического планировщика retry (retry доступен через admin endpoint);
-- long polling и синхронные вызовы Telegram API;
-- нет Web UI и пользовательской модерации;
-- admin endpoint защищён API key; в production-профиле пустой ключ запрещён.
+Никогда не используйте удаление volume, если в PostgreSQL есть нужные данные.
 
 ## Деплой на VPS
 
-### Docker Hub и локальная публикация
-
-1. Создайте в Docker Hub репозиторий `username/your-market`.
-2. Создайте Docker Hub access token (использовать пароль аккаунта не рекомендуется).
-3. Передайте token только в текущую PowerShell-сессию — не сохраняйте его в Git:
+Собрать и отправить image:
 
 ```powershell
-$env:DOCKERHUB_TOKEN = "..."
-docker login --username username
+.\scripts\build-and-push.ps1 -DockerHubUsername username -Version 1.0.0
 ```
 
-Сборка, тесты, создание image и push:
-
-```powershell
-.\scripts\build-and-push.ps1 `
-  -DockerHubUsername username `
-  -Version 1.0.0
-```
-
-Без `-Version` скрипт создаёт тег из UTC/local timestamp и короткого Git commit. `-SkipTests`
-разрешён только для осознанной повторной технической сборки; обычный release выполняет `clean verify`.
-
-### Подготовка VPS
-
-Установите Docker Engine и Docker Compose plugin, затем создайте `/opt/yourmarket`. Скрипт
-`deploy/install-vps.sh` проверяет Ubuntu/Debian и выводит официальные инструкции, если Docker ещё
-не установлен; firewall он не изменяет.
-
-Скопируйте в `/opt/yourmarket`:
-
-- `deploy/docker-compose.prod.yml`;
-- `deploy/deploy.sh`;
-- `deploy/.env.prod.example` как `.env.prod`.
-
-Заполните `.env.prod` непосредственно на VPS и выполните:
+На VPS скопируйте compose-файл и `.env.prod`, заполните секреты, затем:
 
 ```bash
-chmod +x deploy.sh
-./deploy.sh docker.io/username/your-market:1.0.0
+chmod 600 .env.prod
+docker compose --env-file .env.prod -f docker-compose.yml pull
+docker compose --env-file .env.prod -f docker-compose.yml up -d
+docker compose --env-file .env.prod -f docker-compose.yml ps
+docker compose --env-file .env.prod -f docker-compose.yml logs -f app
 ```
 
-PostgreSQL использует именованный volume и не публикует порт наружу. HTTP-порт приложения доступен
-только как `127.0.0.1:8080`; наружу открыт лишь long polling Telegram. Production-профиль требует
-непустой `ADMIN_API_KEY`.
+В production должен работать ровно один экземпляр бота с данным token; Telegram webhook должен быть отключён для long polling. PostgreSQL не публикуется наружу, а admin HTTP endpoint привязан к localhost.
 
-Следующий release можно выполнить из Windows одной командой (SSH использует ключ, пароль параметром
-не принимается):
+## Ограничения MVP
 
-```powershell
-.\scripts\release.ps1 `
-  -DockerHubUsername username `
-  -VpsHost server-ip `
-  -VpsUser deploy `
-  -Version 1.0.1
-```
-
-Состояние и логи на VPS:
-
-```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml ps
-docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f app
-```
-
-При неуспешном healthcheck `deploy.sh` показывает последние 100 строк логов и пытается вернуть
-предыдущий image. Для ручного rollback запустите тот же скрипт с предыдущим неизменяемым тегом:
-
-```bash
-./deploy.sh docker.io/username/your-market:0.9.9
-```
-
-Перед критичными Liquibase-миграциями сделайте backup PostgreSQL. Deploy и rollback никогда не
-удаляют volume. На VPS должен работать только один экземпляр бота с данным token; при long polling
-webhook должен быть отключён. Публичный HTTP-домен приложению не требуется.
+- публикация и внешние вызовы Telegram используют durable claim/reconciliation state;
+- неоднозначные результаты invoice или публикации требуют ручной проверки администратора;
+- возврат Stars реализован как сервисный процесс, без публичного endpoint;
+- нет Web UI и нет автоматического возврата при отклонении модерации.

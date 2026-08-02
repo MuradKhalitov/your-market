@@ -49,7 +49,6 @@ public class TelegramUpdateHandler {
     private final RateLimitService rateLimitService;
     private final ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository draftPhotoRepository;
     private final StartCommandParser startCommandParser;
-    private final CurrencyAmountConverter currencyAmountConverter;
     private final TelegramMessageProvider messages;
 
     public void handle(Update update) {
@@ -280,17 +279,16 @@ public class TelegramUpdateHandler {
             gateway.sendInvoice(chatId, claim.payment());
             paymentService.markInvoiceSent(claim.payment().getId(), claim.operationId());
         } catch (ru.murad.yourmarket.exception.TelegramConfirmedFailureException ex) {
-            Integer minorUnits = null;
+            Integer amountStars = null;
             try {
-                minorUnits = currencyAmountConverter.toMinorUnits(
-                        claim.payment().getAmount(), claim.payment().getCurrency());
+                amountStars = claim.payment().getAmount();
             } catch (IllegalArgumentException amountError) {
                 log.warn("Некорректная локальная сумма invoice paymentId={}, advertisementId={}",
                         claim.payment().getId(), claim.payment().getAdvertisementId());
             }
             log.error("Telegram отклонил invoice paymentId={}, advertisementId={}, currency={}, amount={}, minorUnits={}, operationId={}, telegramErrorCode={}, telegramDescription={}",
                     claim.payment().getId(), claim.payment().getAdvertisementId(), claim.payment().getCurrency(),
-                    claim.payment().getAmount(), minorUnits, claim.operationId(), ex.getErrorCode(),
+                    claim.payment().getAmount(), amountStars, claim.operationId(), ex.getErrorCode(),
                     ex.getApiDescription(), ex);
             try {
                 paymentService.failInvoiceSending(claim.payment().getId(), claim.operationId(),
@@ -381,7 +379,7 @@ public class TelegramUpdateHandler {
         SuccessfulPayment value = message.getSuccessfulPayment();
         PaymentService.SuccessfulPaymentResult result = paymentService.processSuccessfulPayment(
                 new SuccessfulPaymentRequest(message.getFrom().getId(), value.getInvoicePayload(), value.getCurrency(),
-                        value.getTotalAmount().longValue(), value.getTelegramPaymentChargeId(), value.getProviderPaymentChargeId()));
+                        value.getTotalAmount().longValue(), value.getTelegramPaymentChargeId()));
         AdvertisementResponseDto current = advertisementService.findById(result.advertisementId());
         if (publication.isModerationEnabled()) {
             if (current.status() == AdvertisementStatus.WAITING_FOR_MODERATION)

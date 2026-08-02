@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -48,7 +49,6 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
         "telegram.channel.id=-1001234567890",
         "telegram.channel.username=test_channel",
         "telegram.channel.url=https://t.me/test_channel",
-        "telegram.payment.provider-token=test-provider-token",
     "spring.jpa.hibernate.ddl-auto=validate",
     "spring.autoconfigure.exclude=org.telegram.telegrambots.longpolling.starter.TelegramBotStarterConfiguration"
 })
@@ -67,6 +67,8 @@ class LiquibasePostgresIntegrationTest {
 
     @Autowired
     PaymentRepository repository;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
     @Autowired
     AdvertisementPhotoRepository photos;
     @Autowired
@@ -87,6 +89,15 @@ class LiquibasePostgresIntegrationTest {
     AdvertisementDraftRepository drafts;
     @MockitoBean
     TelegramGateway telegramGateway;
+
+    @Test
+    void starsOnlyPaymentSchemaHasNoProviderColumn() {
+        Integer providerColumnCount = jdbcTemplate.queryForObject("""
+                select count(*) from information_schema.columns
+                where table_name = 'payments' and column_name = 'provider_payment_charge_id'
+                """, Integer.class);
+        assertEquals(0, providerColumnCount);
+    }
 
     @Test
     void liquibaseAppliedAndPayloadConstraintIsEnforced() {
@@ -230,27 +241,18 @@ class LiquibasePostgresIntegrationTest {
     }
 
     @Test
-    void activeRubPaymentIsCancelledAndReplacedBySingleStarsPayment() {
+    void schemaRejectsNonStarsCurrency() {
         long userId = 88004L;
         prepareCompleteDraft(userId);
         Advertisement pending = advertisements.saveAndFlush(Advertisement.builder().telegramUserId(userId)
                 .chatId(userId).category(AdvertisementCategory.OTHER).title("Старое объявление")
                 .description("Достаточно длинное описание").itemPrice(BigDecimal.TEN).telegramFileId("file")
                 .city("Москва").contact("@seller").status(AdvertisementStatus.WAITING_FOR_PAYMENT).build());
-        Payment rub = repository.saveAndFlush(Payment.builder().advertisementId(pending.getId())
-                .telegramUserId(userId).payload("legacy-rub-" + userId).amount(new BigDecimal("199.00"))
-                .currency("RUB").status(PaymentStatus.CREATED).invoiceSendStatus(InvoiceSendStatus.NOT_SENT).build());
+        Payment invalidPayment = Payment.builder().advertisementId(pending.getId())
+                .telegramUserId(userId).payload("invalid-currency-" + userId).amount(199)
+                .currency("USD").status(PaymentStatus.CREATED).invoiceSendStatus(InvoiceSendStatus.NOT_SENT).build();
 
-        PaymentService.InvoiceClaim claim = paymentService.createPaymentAndClaimInvoice(userId, "integration_user");
-
-        Payment old = repository.findById(rub.getId()).orElseThrow();
-        assertEquals(PaymentStatus.CANCELLED, old.getStatus());
-        assertEquals("REPLACED_BY_STARS_MIGRATION", old.getFailureReason());
-        assertEquals("XTR", claim.payment().getCurrency());
-        assertEquals(BigDecimal.ONE, claim.payment().getAmount());
-        assertEquals(1, repository.findByAdvertisementIdOrderByCreatedAtDesc(pending.getId()).stream()
-                .filter(payment -> payment.getStatus() == PaymentStatus.CREATED
-                        || payment.getStatus() == PaymentStatus.PRE_CHECKOUT_APPROVED).count());
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> repository.saveAndFlush(invalidPayment));
     }
 
     private void prepareCompleteDraft(long userId) {
@@ -295,6 +297,6 @@ class LiquibasePostgresIntegrationTest {
     private Payment payment(UUID advertisementId, String payload) {
         return Payment.builder().advertisementId(advertisementId).telegramUserId(1L)
             .payload(payload)
-            .amount(new BigDecimal("199.00")).currency("RUB").status(PaymentStatus.CREATED).build();
+            .amount(1).currency("XTR").status(PaymentStatus.CREATED).build();
     }
 }

@@ -9,5 +9,5 @@ class TelegramChannelLinkServiceTest {
  @Test void missingUsername(){assertNull(service("").messageUrl(7));}
  @Test void missingMessageId(){assertNull(service("market").messageUrl(null));}
  private TelegramChannelLinkService service(String u){return new TelegramChannelLinkServiceImpl(new TelegramProperties(
-  new TelegramProperties.Bot("b","t"),new TelegramProperties.Channel("-1",u,""),new TelegramProperties.Payment("p")));}
+  new TelegramProperties.Bot("b","t"),new TelegramProperties.Channel("-1001",u,"")));}
 }

@@ -20,26 +20,23 @@ public class TelegramProperties {
     @Valid @NotNull
     private Channel channel = new Channel();
     @Valid @NotNull
-    private Payment payment = new Payment();
-    @Valid @NotNull
     private Moderation moderation = new Moderation();
     @Valid @NotNull
     private Admin admin = new Admin();
     @Valid @NotNull
     private RateLimit rateLimit = new RateLimit();
 
-    public TelegramProperties(Bot bot, Channel channel, Payment payment) {
-        this.bot = bot; this.channel = channel; this.payment = payment;
+    public TelegramProperties(Bot bot, Channel channel) {
+        this.bot = bot; this.channel = channel;
     }
-    public TelegramProperties(Bot bot, Channel channel, Payment payment, Moderation moderation, Admin admin, RateLimit rateLimit) {
-        this.bot=bot;this.channel=channel;this.payment=payment;this.moderation=moderation;this.admin=admin;this.rateLimit=rateLimit;
+    public TelegramProperties(Bot bot, Channel channel, Moderation moderation, Admin admin, RateLimit rateLimit) {
+        this.bot=bot;this.channel=channel;this.moderation=moderation;this.admin=admin;this.rateLimit=rateLimit;
     }
-    public Bot bot(){return bot;} public Channel channel(){return channel;} public Payment payment(){return payment;}
+    public Bot bot(){return bot;} public Channel channel(){return channel;}
     public Moderation moderation(){return moderation;} public Admin admin(){return admin;} public RateLimit rateLimit(){return rateLimit;}
 
     @Getter @Setter @NoArgsConstructor public static class Bot {@NotBlank private String username="";@NotBlank private String token="";public Bot(String username,String token){this.username=username;this.token=token;}public String username(){return username;}public String token(){return token;}}
     @Getter @Setter @NoArgsConstructor public static class Channel {@NotBlank @Pattern(regexp="^-100\\d+$") private String id="";@NotBlank private String username="";@NotBlank @URL private String url="";public Channel(String id,String username,String url){this.id=id;this.username=username;this.url=url;}public String id(){return id;}public String username(){return username;}public String url(){return url;}}
-    @Getter @Setter @NoArgsConstructor public static class Payment {private String providerToken="";public Payment(String providerToken){this.providerToken=providerToken;}public String providerToken(){return providerToken;}}
     @Getter @Setter @NoArgsConstructor public static class Moderation {private String chatId="";public Moderation(String chatId){this.chatId=chatId;}public String chatId(){return chatId;}}
     @Getter @Setter @NoArgsConstructor public static class Admin {private List<Long> userIds=new ArrayList<>();public Admin(List<Long> userIds){this.userIds=userIds;}public List<Long> userIds(){return userIds;}}
     @Getter @Setter @NoArgsConstructor public static class RateLimit {

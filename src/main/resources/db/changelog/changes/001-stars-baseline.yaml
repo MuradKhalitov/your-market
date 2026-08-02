@@ -1,0 +1,159 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-stars-baseline
+      author: yourmarket
+      changes:
+        - createTable:
+            tableName: telegram_users
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false, unique: true}}
+              - column: {name: chat_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: username, type: varchar(255)}
+              - column: {name: first_name, type: varchar(255)}
+              - column: {name: blocked, type: boolean, defaultValueBoolean: false, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - createTable:
+            tableName: advertisement_drafts
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false, unique: true}}
+              - column: {name: chat_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: step, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: category, type: varchar(50)}
+              - column: {name: title, type: varchar(150)}
+              - column: {name: description, type: varchar(2000)}
+              - column: {name: item_price, type: "numeric(11,2)"}
+              - column: {name: telegram_file_id, type: varchar(255)}
+              - column: {name: city, type: varchar(100)}
+              - column: {name: contact, type: varchar(255)}
+              - column: {name: edit_mode, type: boolean, defaultValueBoolean: false, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - createTable:
+            tableName: advertisements
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: chat_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: username, type: varchar(255)}
+              - column: {name: category, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: title, type: varchar(150), constraints: {nullable: false}}
+              - column: {name: description, type: varchar(2000), constraints: {nullable: false}}
+              - column: {name: item_price, type: "numeric(11,2)", constraints: {nullable: false}}
+              - column: {name: telegram_file_id, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: city, type: varchar(100), constraints: {nullable: false}}
+              - column: {name: contact, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: status, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: channel_message_id, type: integer}
+              - column: {name: paid_at, type: timestamptz}
+              - column: {name: published_at, type: timestamptz}
+              - column: {name: deleted_at, type: timestamptz}
+              - column: {name: expires_at, type: timestamptz}
+              - column: {name: expired_at, type: timestamptz}
+              - column: {name: rejected_at, type: timestamptz}
+              - column: {name: rejection_reason, type: varchar(500)}
+              - column: {name: publication_operation_id, type: uuid}
+              - column: {name: publication_started_at, type: timestamptz}
+              - column: {name: publication_phase, type: varchar(40)}
+              - column: {name: publication_updated_at, type: timestamptz}
+              - column: {name: publication_failure_reason, type: varchar(500)}
+              - column: {name: moderation_message_id, type: integer}
+              - column: {name: moderation_submitted_at, type: timestamptz}
+              - column: {name: moderation_submission_status, type: varchar(30), defaultValue: NOT_SUBMITTED, constraints: {nullable: false}}
+              - column: {name: moderation_sending_since, type: timestamptz}
+              - column: {name: moderation_operation_id, type: uuid}
+              - column: {name: moderation_phase, type: varchar(40)}
+              - column: {name: expiration_operation_id, type: uuid}
+              - column: {name: expiration_started_at, type: timestamptz}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - createTable:
+            tableName: payments
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: payload, type: varchar(255), constraints: {nullable: false, unique: true}}
+              - column: {name: amount, type: integer, constraints: {nullable: false}}
+              - column: {name: currency, type: varchar(3), constraints: {nullable: false}}
+              - column: {name: status, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: telegram_payment_charge_id, type: varchar(255), constraints: {unique: true}}
+              - column: {name: failure_reason, type: varchar(255)}
+              - column: {name: paid_at, type: timestamptz}
+              - column: {name: invoice_send_status, type: varchar(30), defaultValue: NOT_SENT, constraints: {nullable: false}}
+              - column: {name: invoice_sending_since, type: timestamptz}
+              - column: {name: invoice_sent_at, type: timestamptz}
+              - column: {name: invoice_operation_id, type: uuid}
+              - column: {name: refund_operation_id, type: uuid}
+              - column: {name: refund_started_at, type: timestamptz}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamptz, constraints: {nullable: false}}
+        - createTable:
+            tableName: advertisement_photos
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: telegram_file_id, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_photos, columnNames: "advertisement_id, position", constraintName: uk_ad_photo_position}
+        - sql: {sql: "ALTER TABLE advertisement_photos ADD CONSTRAINT chk_ad_photo_position CHECK (position BETWEEN 0 AND 4)"}
+        - createTable:
+            tableName: advertisement_draft_photos
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: draft_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: telegram_file_id, type: varchar(255), constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_draft_photos, columnNames: "draft_id, position", constraintName: uk_draft_photo_position}
+        - sql: {sql: "ALTER TABLE advertisement_draft_photos ADD CONSTRAINT chk_draft_photo_position CHECK (position BETWEEN 0 AND 4)"}
+        - createTable:
+            tableName: advertisement_channel_messages
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: channel_message_id, type: integer, constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: publication_operation_id, type: uuid}
+              - column: {name: deletion_status, type: varchar(30), defaultValue: ACTIVE, constraints: {nullable: false}}
+              - column: {name: deletion_started_at, type: timestamptz}
+              - column: {name: deleted_at, type: timestamptz}
+              - column: {name: delete_attempts, type: integer, defaultValueNumeric: 0, constraints: {nullable: false}}
+              - column: {name: last_delete_error, type: varchar(500)}
+              - column: {name: delete_operation_id, type: uuid}
+              - column: {name: message_type, type: varchar(30), defaultValue: PHOTO, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: advertisement_channel_messages, columnNames: "advertisement_id, position", constraintName: uk_ad_channel_position}
+        - sql: {sql: "ALTER TABLE advertisement_channel_messages ADD CONSTRAINT chk_ad_channel_position CHECK (position BETWEEN 0 AND 5)"}
+        - createTable:
+            tableName: moderation_telegram_messages
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: advertisement_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: moderation_operation_id, type: uuid, constraints: {nullable: false}}
+              - column: {name: message_id, type: integer, constraints: {nullable: false}}
+              - column: {name: position, type: integer, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamptz, constraints: {nullable: false}}
+        - addUniqueConstraint: {tableName: moderation_telegram_messages, columnNames: "advertisement_id, position", constraintName: uk_moderation_message_position}
+        - createTable:
+            tableName: telegram_rate_limits
+            columns:
+              - column: {name: telegram_user_id, type: bigint, constraints: {nullable: false}}
+              - column: {name: action_type, type: varchar(50), constraints: {nullable: false}}
+              - column: {name: window_started_at, type: timestamptz, constraints: {nullable: false}}
+              - column: {name: action_count, type: integer, constraints: {nullable: false}}
+        - addPrimaryKey: {tableName: telegram_rate_limits, columnNames: "telegram_user_id, action_type", constraintName: pk_telegram_rate_limits}
+        - sql: {sql: "ALTER TABLE payments ADD CONSTRAINT chk_payments_amount_positive CHECK (amount >= 1)"}
+        - sql: {sql: "ALTER TABLE payments ADD CONSTRAINT chk_payments_currency_xtr CHECK (currency = 'XTR')"}
+        - sql: {sql: "CREATE UNIQUE INDEX ux_payments_one_active_per_advertisement ON payments (advertisement_id) WHERE status IN ('CREATED', 'PRE_CHECKOUT_APPROVED')"}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_user_created, columns: [{column: {name: telegram_user_id}}, {column: {name: created_at}}]}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_status, columns: [{column: {name: status}}]}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_expiration, columns: [{column: {name: status}}, {column: {name: expires_at}}]}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_publication_operation, columns: [{column: {name: publication_operation_id}}]}
+        - createIndex: {tableName: advertisements, indexName: idx_publication_recovery, columns: [{column: {name: status}}, {column: {name: publication_updated_at}}]}
+        - createIndex: {tableName: advertisements, indexName: idx_ads_expiration_recovery, columns: [{column: {name: status}}, {column: {name: expiration_started_at}}]}
+        - createIndex: {tableName: payments, indexName: idx_payments_payload_status, columns: [{column: {name: payload}}, {column: {name: status}}]}
+        - createIndex: {tableName: advertisement_channel_messages, indexName: idx_channel_messages_deletion, columns: [{column: {name: advertisement_id}}, {column: {name: deletion_status}}]}
+        - createIndex: {tableName: telegram_rate_limits, indexName: idx_rate_limits_window_started, columns: [{column: {name: window_started_at}}]}

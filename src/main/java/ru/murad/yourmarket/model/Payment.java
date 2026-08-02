@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import ru.murad.yourmarket.model.enums.PaymentStatus;
 import ru.murad.yourmarket.model.enums.InvoiceSendStatus;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -14,22 +13,21 @@ import java.util.UUID;
 public class Payment extends BaseEntity {
     @Id @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-    @Column(name = "advertisement_id", nullable = false, unique = true)
+    @Column(name = "advertisement_id", nullable = false)
     private UUID advertisementId;
     @Column(name = "telegram_user_id", nullable = false)
     private Long telegramUserId;
     @Column(nullable = false, unique = true)
     private String payload;
-    @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal amount;
+    /** Number of Telegram Stars in the immutable invoice snapshot. */
+    @Column(nullable = false)
+    private Integer amount;
     @Column(nullable = false, length = 3)
     private String currency;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
     private PaymentStatus status;
     @Column(name = "telegram_payment_charge_id", unique = true)
     private String telegramPaymentChargeId;
-    @Column(name = "provider_payment_charge_id", unique = true)
-    private String providerPaymentChargeId;
     @Column(name = "failure_reason")
     private String failureReason;
     @Column(name = "paid_at")

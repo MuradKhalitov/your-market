@@ -20,8 +20,6 @@ telegram:
     id: ${TELEGRAM_CHANNEL_ID:}
     username: ${TELEGRAM_CHANNEL_USERNAME:}
     url: ${TELEGRAM_CHANNEL_URL:https://t.me/your_market}
-  payment:
-    provider-token: ${YOOKASSA_PROVIDER_TOKEN:}
   moderation:
     chat-id: ${TELEGRAM_MODERATION_CHAT_ID:}
   admin:

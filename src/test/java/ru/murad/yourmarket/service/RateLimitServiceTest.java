@@ -9,6 +9,6 @@ class RateLimitServiceTest {
  @Test void disabledDoesNotTouchDatabase(){assertTrue(service(false,1).allow(1L,"MESSAGE"));verifyNoInteractions(jdbc);}
  @Test void cleanupDeletesOnlyConfiguredBatch(){when(jdbc.update(anyString(),any(),eq(500))).thenReturn(17);assertEquals(17,service(true,20).cleanupExpired());}
  private RateLimitService service(boolean enabled,int max){return new RateLimitServiceImpl(jdbc,new TelegramProperties(
-  new TelegramProperties.Bot("b","t"),new TelegramProperties.Channel("-1","c",""),new TelegramProperties.Payment("p"),
+  new TelegramProperties.Bot("b","t"),new TelegramProperties.Channel("-1001","c",""),
   new TelegramProperties.Moderation(""),new TelegramProperties.Admin(java.util.List.of()),new TelegramProperties.RateLimit(enabled,max,60)));}
 }

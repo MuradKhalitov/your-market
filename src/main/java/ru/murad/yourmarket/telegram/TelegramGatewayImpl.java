@@ -11,7 +11,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice;
 import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
-import ru.murad.yourmarket.config.*;
+import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.exception.TelegramPublicationException;
 import ru.murad.yourmarket.model.*;
 import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
@@ -19,7 +19,6 @@ import java.text.*;
 import java.util.List;
 import java.util.regex.Pattern;
 import ru.murad.yourmarket.repository.AdvertisementPhotoRepository;
-import ru.murad.yourmarket.service.CurrencyAmountConverter;
 
 @Component
 @RequiredArgsConstructor
@@ -27,10 +26,8 @@ public class TelegramGatewayImpl implements TelegramGateway {
     private static final Pattern USERNAME = Pattern.compile("^@[A-Za-z0-9_]{5,32}$");
     private final TelegramClient client;
     private final TelegramProperties telegram;
-    private final PublicationProperties publication;
     private final TelegramKeyboardFactory keyboards;
     private final AdvertisementPhotoRepository photoRepository;
-    private final CurrencyAmountConverter currencyAmountConverter;
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
@@ -89,12 +86,8 @@ public class TelegramGatewayImpl implements TelegramGateway {
         if (!"XTR".equals(payment.getCurrency())) {
             throw new IllegalArgumentException("Only XTR invoices are supported for publication");
         }
-        int minorUnits;
-        try {
-            minorUnits = currencyAmountConverter.toMinorUnits(payment.getAmount(), payment.getCurrency());
-        } catch (IllegalArgumentException exception) {
-            throw new ru.murad.yourmarket.exception.TelegramConfirmedFailureException(
-                    "Invalid invoice amount", null, "CURRENCY_TOTAL_AMOUNT_INVALID", exception);
+        if (payment.getAmount() == null || payment.getAmount() < 1) {
+            throw new IllegalArgumentException("Telegram Stars amount must be positive");
         }
         try {
             SendInvoice.SendInvoiceBuilder<?, ?> builder = SendInvoice.builder().chatId(chatId)
@@ -102,7 +95,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
                     .description("Размещение объявления в канале YourMarket")
                     .payload(payment.getPayload()).currency("XTR")
                     .prices(List.of(new LabeledPrice("Размещение объявления",
-                            minorUnits)))
+                            payment.getAmount())))
                     .needName(false).needPhoneNumber(false).needEmail(false)
                     .needShippingAddress(false).isFlexible(false);
             client.execute(builder.build());

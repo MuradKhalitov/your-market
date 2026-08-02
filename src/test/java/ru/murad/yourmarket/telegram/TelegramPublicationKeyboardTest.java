@@ -36,13 +36,12 @@ import ru.murad.yourmarket.telegram.keyboard.TelegramKeyboardFactory;
 class TelegramPublicationKeyboardTest {
     private final TelegramClient client = mock(TelegramClient.class);
     private final AdvertisementPhotoRepository photos = mock(AdvertisementPhotoRepository.class);
-    private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(), new PublicationProperties(),
-            new TelegramKeyboardFactory(new PublicationProperties()), photos,
-            new ru.murad.yourmarket.service.CurrencyAmountConverter());
+    private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(),
+            new TelegramKeyboardFactory(new PublicationProperties()), photos);
 
     @Test
     void starsInvoiceUsesStarsWithoutMinorUnitConversion() throws Exception {
-        Payment payment = Payment.builder().payload("opaque-payload").amount(new BigDecimal("1.00"))
+        Payment payment = Payment.builder().payload("opaque-payload").amount(1)
                 .currency("XTR").build();
 
         gateway.sendInvoice(10L, payment);
@@ -52,7 +51,6 @@ class TelegramPublicationKeyboardTest {
         assertEquals("XTR", captor.getValue().getCurrency());
         assertEquals(1, captor.getValue().getPrices().getFirst().getAmount());
         assertEquals(1, captor.getValue().getPrices().size());
-        assertNull(captor.getValue().getProviderToken());
         assertNull(captor.getValue().getMaxTipAmount());
         assertTrue(captor.getValue().getSuggestedTipAmounts() == null
                 || captor.getValue().getSuggestedTipAmounts().isEmpty());
@@ -65,7 +63,7 @@ class TelegramPublicationKeyboardTest {
 
     @Test
     void telegramRequestFailureKeepsStructuredError() throws Exception {
-        Payment payment = Payment.builder().payload("opaque-payload").amount(new BigDecimal("1.00"))
+        Payment payment = Payment.builder().payload("opaque-payload").amount(1)
                 .currency("XTR").build();
         var response = org.telegram.telegrambots.meta.api.objects.ApiResponse.builder()
                 .ok(false).errorCode(400).errorDescription("Bad Request: CURRENCY_TOTAL_AMOUNT_INVALID").build();
@@ -159,7 +157,6 @@ class TelegramPublicationKeyboardTest {
 
     private TelegramProperties properties() {
         return new TelegramProperties(new TelegramProperties.Bot("@your_market_bot", "token"),
-                new TelegramProperties.Channel("-1001234567890", "channel", "https://t.me/channel"),
-                new TelegramProperties.Payment("provider"));
+                new TelegramProperties.Channel("-1001234567890", "channel", "https://t.me/channel"));
     }
 }

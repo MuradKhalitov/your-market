@@ -67,8 +67,7 @@ class TelegramUpdateHandlerTest {
     ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository draftPhotos = mock(
         ru.murad.yourmarket.repository.AdvertisementDraftPhotoRepository.class);
     TelegramProperties telegram = new TelegramProperties(new TelegramProperties.Bot("bot", "token"),
-        new TelegramProperties.Channel("-1", "channel", "https://t.me/channel"),
-        new TelegramProperties.Payment("provider"));
+        new TelegramProperties.Channel("-1001", "channel", "https://t.me/channel"));
     PublicationProperties publication = publicationProperties();
     TelegramKeyboardFactory keyboards = new TelegramKeyboardFactory(publication);
     StartCommandParser startCommands = new StartCommandParser();
@@ -81,7 +80,7 @@ class TelegramUpdateHandlerTest {
     TelegramUpdateHandler handler = new TelegramUpdateHandler(client, gateway, keyboards, telegram,
         publication,
         users, drafts, payments, publications, advertisements, retries, links, moderation,
-        rateLimit, draftPhotos, startCommands, new ru.murad.yourmarket.service.CurrencyAmountConverter(),
+        rateLimit, draftPhotos, startCommands,
         new ru.murad.yourmarket.telegram.TelegramMessageProvider());
 
     @BeforeEach

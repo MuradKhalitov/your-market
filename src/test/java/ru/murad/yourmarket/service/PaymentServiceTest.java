@@ -40,6 +40,11 @@ import ru.murad.yourmarket.service.impl.PaymentServiceImpl;
 
 class PaymentServiceTest {
 
+    @Test
+    void paymentAmountIsIntegerStars() throws NoSuchFieldException {
+        assertEquals(Integer.class, Payment.class.getDeclaredField("amount").getType());
+    }
+
     private PublicationProperties publicationProperties(boolean moderationEnabled) {
         PublicationProperties properties = new PublicationProperties();
         properties.setPriceStars(1);
@@ -63,8 +68,7 @@ class PaymentServiceTest {
         draftPhotos,
         adPhotos,
         mapper,
-        publication,
-        new CurrencyAmountConverter()
+        publication
     );
 
     @Test
@@ -81,7 +85,7 @@ class PaymentServiceTest {
         when(advertisements.save(ad)).thenReturn(ad);
         when(payments.save(any())).thenAnswer(i -> i.getArgument(0));
         Payment payment = service.createPaymentAndClaimInvoice(1L, "user").payment();
-        assertEquals(BigDecimal.ONE, payment.getAmount());
+        assertEquals(1, payment.getAmount());
         assertEquals("XTR", payment.getCurrency());
         assertEquals(PaymentStatus.CREATED, payment.getStatus());
         assertNotNull(payment.getPayload());
@@ -99,7 +103,7 @@ class PaymentServiceTest {
     @Test
     void existingPaymentUsesStoredStarsPriceAfterConfigurationChange() {
         Payment payment = payment(PaymentStatus.CREATED);
-        payment.setAmount(BigDecimal.valueOf(5));
+        payment.setAmount(5);
         Advertisement advertisement = ad(AdvertisementStatus.WAITING_FOR_PAYMENT);
         when(payments.findByPayloadForUpdate("payload")).thenReturn(Optional.of(payment));
         when(advertisements.findByIdForUpdate(ADVERTISEMENT_ID)).thenReturn(Optional.of(advertisement));
@@ -107,12 +111,12 @@ class PaymentServiceTest {
 
         assertTrue(service.approvePreCheckout(1L, "payload", "XTR", 5L).approved());
         var result = service.processSuccessfulPayment(new SuccessfulPaymentRequest(
-                1L, "payload", "XTR", 5L, "tg-old-price", ""));
+                1L, "payload", "XTR", 5L, "tg-old-price"));
 
         assertTrue(result.newlyProcessed());
         assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
         assertEquals(AdvertisementStatus.PAID, advertisement.getStatus());
-        assertEquals(BigDecimal.valueOf(5), payment.getAmount());
+        assertEquals(5, payment.getAmount());
     }
 
     @Test
@@ -132,7 +136,7 @@ class PaymentServiceTest {
 
         Payment created = service.createPaymentAndClaimInvoice(1L, "user").payment();
 
-        assertEquals(BigDecimal.valueOf(5), created.getAmount());
+        assertEquals(5, created.getAmount());
         assertEquals("XTR", created.getCurrency());
         assertNotNull(created.getPayload());
     }
@@ -190,12 +194,10 @@ class PaymentServiceTest {
     }
 
     @Test
-    void paidRubPaymentIsNeverReplacedByStarsPayment() {
+    void paidPaymentDoesNotCreateAnotherInvoice() {
         AdvertisementDraft draft = completeDraft();
         Advertisement advertisement = ad(AdvertisementStatus.WAITING_FOR_PAYMENT);
         Payment legacy = payment(PaymentStatus.SUCCEEDED);
-        legacy.setCurrency("RUB");
-        legacy.setAmount(new BigDecimal("199.00"));
         when(users.findByTelegramUserIdForUpdate(1L)).thenReturn(
                 Optional.of(TelegramUser.builder().telegramUserId(1L).build()));
         when(drafts.findByTelegramUserId(1L)).thenReturn(Optional.of(draft));
@@ -291,8 +293,7 @@ class PaymentServiceTest {
             draftPhotos,
             adPhotos,
             mapper,
-            publicationProperties(true),
-            new CurrencyAmountConverter()
+                publicationProperties(true)
         );
 
         moderated.processSuccessfulPayment(request());
@@ -304,13 +305,13 @@ class PaymentServiceTest {
     }
 
     private SuccessfulPaymentRequest request() {
-        return new SuccessfulPaymentRequest(1L, "payload", "XTR", 1L, "tg-charge", "");
+        return new SuccessfulPaymentRequest(1L, "payload", "XTR", 1L, "tg-charge");
     }
 
     private Payment payment(PaymentStatus status) {
         return Payment.builder().id(UUID.randomUUID()).advertisementId(ADVERTISEMENT_ID)
             .telegramUserId(1L)
-            .payload("payload").amount(BigDecimal.ONE).currency("XTR").status(status)
+            .payload("payload").amount(1).currency("XTR").status(status)
             .build();
     }
 

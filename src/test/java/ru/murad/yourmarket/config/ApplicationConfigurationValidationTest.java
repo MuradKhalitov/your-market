@@ -22,7 +22,6 @@ class ApplicationConfigurationValidationTest {
 
     @Test void blankBotTokenFails(){fails("telegram.bot.token=", "telegram.bot.token");}
     @Test void blankChannelIdFails(){fails("telegram.channel.id=", "telegram.channel.id");}
-    @Test void blankProviderTokenIsAllowedForStars(){runner.withPropertyValues("telegram.payment.provider-token=").run(c->assertThat(c).hasNotFailed());}
     @Test void nonPositiveStarsPriceFails(){fails("publication.price-stars=0", "publication.priceStars");}
     @Test void fractionalStarsPriceFails(){failsInCauseChain("publication.price-stars=1.5", "publication.price-stars");}
     @Test void starsPriceExceedingTelegramIntegerAmountFails(){failsInCauseChain("publication.price-stars=2147483648", "publication.price-stars");}
@@ -48,12 +47,8 @@ class ApplicationConfigurationValidationTest {
     @Configuration(proxyBeanMethods=false)
     @EnableConfigurationProperties({TelegramProperties.class,PublicationProperties.class})
     static class TestConfig {
-        @Bean ru.murad.yourmarket.service.CurrencyAmountConverter currencyAmountConverter() {
-            return new ru.murad.yourmarket.service.CurrencyAmountConverter();
-        }
-        @Bean ApplicationConfigurationValidator validator(PublicationProperties p, TelegramProperties t,
-                ru.murad.yourmarket.service.CurrencyAmountConverter converter) {
-            return new ApplicationConfigurationValidator(p, t, converter);
+        @Bean ApplicationConfigurationValidator validator(PublicationProperties p, TelegramProperties t) {
+            return new ApplicationConfigurationValidator(p, t);
         }
     }
 }

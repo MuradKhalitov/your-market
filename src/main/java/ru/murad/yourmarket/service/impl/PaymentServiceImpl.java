@@ -14,7 +14,6 @@ import ru.murad.yourmarket.model.enums.*;
 import ru.murad.yourmarket.repository.*;
 import ru.murad.yourmarket.service.PaymentService;
 import java.time.Instant;
-import java.math.BigDecimal;
 import java.util.UUID;
 
 @Slf4j
@@ -29,7 +28,6 @@ public class PaymentServiceImpl implements PaymentService {
     private final AdvertisementPhotoRepository photoRepository;
     private final AdvertisementMapper mapper;
     private final PublicationProperties properties;
-    private final ru.murad.yourmarket.service.CurrencyAmountConverter currencyAmountConverter;
 
     @Override @Transactional
     public InvoiceClaim createPaymentAndClaimInvoice(Long userId, String username) {
@@ -46,12 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .filter(payment -> payment.getStatus() == PaymentStatus.CREATED
                             || payment.getStatus() == PaymentStatus.PRE_CHECKOUT_APPROVED)
                     .findFirst().orElse(null);
-            if (activePayment != null && "XTR".equals(activePayment.getCurrency())) return claimInvoice(activePayment);
-            if (activePayment != null) {
-                activePayment.setStatus(PaymentStatus.CANCELLED);
-                activePayment.setFailureReason("REPLACED_BY_STARS_MIGRATION");
-                paymentRepository.saveAndFlush(activePayment);
-            }
+            if (activePayment != null) return claimInvoice(activePayment);
             Payment paid = paymentRepository.findByAdvertisementIdForUpdate(pending.getId()).stream()
                     .filter(payment -> payment.getStatus() == PaymentStatus.SUCCEEDED).findFirst().orElse(null);
             if (paid != null) throw new InvalidPaymentStateException("Объявление уже оплачено.");
@@ -77,7 +70,7 @@ public class PaymentServiceImpl implements PaymentService {
     private Payment createStarsPayment(Advertisement advertisement, Long userId) {
         Payment payment = Payment.builder()
                 .advertisementId(advertisement.getId()).telegramUserId(userId)
-                .payload(UUID.randomUUID().toString()).amount(BigDecimal.valueOf(properties.getPriceStars()))
+                .payload(UUID.randomUUID().toString()).amount(properties.getPriceStars())
                 .currency("XTR").status(PaymentStatus.CREATED)
                 .invoiceSendStatus(InvoiceSendStatus.NOT_SENT).build();
         Payment saved = paymentRepository.save(payment);
@@ -155,7 +148,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.getStatus() != PaymentStatus.CREATED)
             return PreCheckoutResult.reject("Платёж уже обработан или недоступен.");
         if (!"XTR".equals(payment.getCurrency()) || !payment.getCurrency().equals(currency)
-                || expectedMinor(payment) != totalAmount)
+                || payment.getAmount().longValue() != totalAmount)
             return PreCheckoutResult.reject("Сумма или валюта платежа не совпадает.");
         Advertisement ad = advertisementRepository.findByIdForUpdate(payment.getAdvertisementId()).orElse(null);
         if (ad == null || ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
@@ -177,14 +170,13 @@ public class PaymentServiceImpl implements PaymentService {
             throw new InvalidPaymentStateException("Платёж находится в недопустимом состоянии.");
         if (!payment.getTelegramUserId().equals(request.telegramUserId())
                 || !"XTR".equals(payment.getCurrency()) || !payment.getCurrency().equals(request.currency())
-                || expectedMinor(payment) != request.totalAmount())
+                || payment.getAmount().longValue() != request.totalAmount())
             throw new InvalidPaymentStateException("Данные успешного платежа не прошли проверку.");
         if (ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
             throw new InvalidAdvertisementStateException("Объявление не ожидает оплату.");
         Instant now = Instant.now();
         payment.setStatus(PaymentStatus.SUCCEEDED);
         payment.setTelegramPaymentChargeId(request.telegramChargeId());
-        payment.setProviderPaymentChargeId(blankToNull(request.providerChargeId()));
         payment.setPaidAt(now);
         ad.setStatus(properties.isModerationEnabled()
                 ? AdvertisementStatus.WAITING_FOR_MODERATION : AdvertisementStatus.PAID);
@@ -197,14 +189,6 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Платёж подтверждён paymentId={}, advertisementId={}, telegramUserId={}",
                 payment.getId(), ad.getId(), request.telegramUserId());
         return new SuccessfulPaymentResult(ad.getId(), true);
-    }
-
-    private long expectedMinor(Payment payment) {
-        return currencyAmountConverter.toMinorUnits(payment.getAmount(), payment.getCurrency());
-    }
-
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
     }
 
     private void validateComplete(AdvertisementDraft d) {
