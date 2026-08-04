@@ -25,6 +25,8 @@ public class OperationalMetrics {
 
     public void invoiceClaim(String result) { count("payment.invoice.claims", "result", result); }
     public void successfulPayment(boolean duplicate) { count("payment.successful", "result", duplicate ? "duplicate" : "processed"); }
+    public void freePublication() { count("publication.submissions", "payment_mode", "free"); }
+    public void starsPublication() { count("publication.submissions", "payment_mode", "telegram_stars"); }
     public void refund(String result) { count("payment.refund", "result", result); }
     public void publication(String result) { count("publication.operations", "result", result); }
     public void moderation(String result) { count("moderation.operations", "result", result); }

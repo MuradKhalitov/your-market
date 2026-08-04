@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public interface PaymentService {
     InvoiceClaim createPaymentAndClaimInvoice(Long telegramUserId, String username);
+    SuccessfulPaymentResult submitFreePublication(Long telegramUserId, String username);
     void markInvoiceSent(UUID paymentId, UUID operationId);
     void failInvoiceSending(UUID paymentId, UUID operationId, String safeReason);
     void markInvoiceUnknown(UUID paymentId, UUID operationId);

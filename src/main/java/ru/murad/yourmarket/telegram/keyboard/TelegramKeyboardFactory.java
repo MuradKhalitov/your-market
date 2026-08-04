@@ -5,6 +5,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.*;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.config.PaymentsProperties;
 import ru.murad.yourmarket.model.enums.AdvertisementCategory;
 import java.util.*;
 
@@ -20,9 +21,11 @@ public class TelegramKeyboardFactory {
     public static final String PHOTOS_CLEAR = "🗑 Очистить фотографии";
 
     private final PublicationProperties publication;
+    private final PaymentsProperties payments;
 
-    public TelegramKeyboardFactory(PublicationProperties publication) {
+    public TelegramKeyboardFactory(PublicationProperties publication, PaymentsProperties payments) {
         this.publication = publication;
+        this.payments = payments;
     }
 
     public ReplyKeyboardMarkup mainMenu() {
@@ -47,7 +50,7 @@ public class TelegramKeyboardFactory {
     }
 
     public InlineKeyboardMarkup preview() {
-        return inlineRows(callback("Оплатить " + publication.getPriceStars() + " ⭐", "pay"),
+        return inlineRows(callback(payments.isEnabled() ? "Оплатить " + publication.getPriceStars() + " ⭐" : "Отправить на модерацию", "pay"),
                 callback("✏️ Изменить", "edit:menu"),
                 callback("❌ Отменить", "cancel"));
     }

@@ -51,6 +51,7 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
         "telegram.channel.id=-1001234567890",
         "telegram.channel.username=test_channel",
         "telegram.channel.url=https://t.me/test_channel",
+        "yourmarket.payments.enabled=true",
     "spring.jpa.hibernate.ddl-auto=validate",
     "spring.autoconfigure.exclude=org.telegram.telegrambots.longpolling.starter.TelegramBotStarterConfiguration"
 })
@@ -58,7 +59,7 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
 class LiquibasePostgresIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16.3-alpine");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {

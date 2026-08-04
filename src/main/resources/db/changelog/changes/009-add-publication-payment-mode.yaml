@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-add-publication-payment-mode
+      author: yourmarket
+      changes:
+        - addColumn:
+            tableName: advertisements
+            columns:
+              - column: {name: publication_payment_mode, type: varchar(30)}
+        # Before this migration all advertisements used the mandatory Stars flow.
+        - sql: {sql: "UPDATE advertisements SET publication_payment_mode = 'TELEGRAM_STARS' WHERE publication_payment_mode IS NULL"}
+        - addNotNullConstraint: {tableName: advertisements, columnName: publication_payment_mode, columnDataType: varchar(30)}
+        - sql: {sql: "ALTER TABLE advertisements ADD CONSTRAINT chk_advertisements_publication_payment_mode CHECK (publication_payment_mode IN ('TELEGRAM_STARS', 'FREE'))"}

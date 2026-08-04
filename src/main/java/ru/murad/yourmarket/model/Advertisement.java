@@ -46,6 +46,8 @@ public class Advertisement extends BaseEntity {
     private String contact;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
     private AdvertisementStatus status;
+    @Enumerated(EnumType.STRING) @Column(name = "publication_payment_mode", nullable = false, length = 30)
+    @Builder.Default private PublicationPaymentMode publicationPaymentMode = PublicationPaymentMode.TELEGRAM_STARS;
     @Column(name = "channel_message_id")
     private Integer channelMessageId;
     @Column(name = "paid_at")

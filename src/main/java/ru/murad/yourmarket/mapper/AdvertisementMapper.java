@@ -9,6 +9,7 @@ public interface AdvertisementMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "username", source = "username")
     @Mapping(target = "status", constant = "WAITING_FOR_PAYMENT")
+    @Mapping(target = "publicationPaymentMode", ignore = true)
     @Mapping(target = "channelMessageId", ignore = true)
     @Mapping(target = "paidAt", ignore = true)
     @Mapping(target = "publishedAt", ignore = true)

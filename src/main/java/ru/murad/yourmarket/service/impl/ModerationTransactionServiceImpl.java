@@ -22,6 +22,7 @@ import ru.murad.yourmarket.model.enums.AdvertisementStatus;
 import ru.murad.yourmarket.model.enums.ModerationPhase;
 import ru.murad.yourmarket.model.enums.ModerationSubmissionStatus;
 import ru.murad.yourmarket.model.enums.PaymentStatus;
+import ru.murad.yourmarket.model.enums.PublicationPaymentMode;
 import ru.murad.yourmarket.repository.AdvertisementRepository;
 import ru.murad.yourmarket.repository.ModerationTelegramMessageRepository;
 import ru.murad.yourmarket.repository.PaymentRepository;
@@ -100,9 +101,9 @@ public class ModerationTransactionServiceImpl implements ModerationTransactionSe
 
     @Override @Transactional(readOnly = true)
     public boolean hasSavedMedia(UUID id) { return !messages.findByAdvertisementIdOrderByPosition(id).isEmpty(); }
-    @Override @Transactional public void approve(UUID id, Long admin) { validateAdmin(admin); decision(id).setStatus(AdvertisementStatus.PAID); }
+    @Override @Transactional public void approve(UUID id, Long admin) { validateAdmin(admin); Advertisement ad = decision(id); if (ad.getPublicationPaymentMode() != PublicationPaymentMode.FREE) ad.setStatus(AdvertisementStatus.PAID); }
     @Override @Transactional public AdvertisementResponseDto reject(UUID id, Long admin, String reason) { validateAdmin(admin); Advertisement ad = decision(id); ad.setStatus(AdvertisementStatus.REJECTED); ad.setRejectedAt(Instant.now()); ad.setRejectionReason(reason); return mapper.toResponse(ad); }
-    private Advertisement decision(UUID id) { Advertisement ad = lock(id); if (ad.getStatus() != AdvertisementStatus.WAITING_FOR_MODERATION) throw new InvalidAdvertisementStateException("Decision already made."); Payment payment = payments.findByAdvertisementId(id).orElseThrow(PaymentNotFoundException::new); if (payment.getStatus() != PaymentStatus.SUCCEEDED) throw new InvalidPaymentStateException("Payment is not successful."); return ad; }
+    private Advertisement decision(UUID id) { Advertisement ad = lock(id); if (ad.getStatus() != AdvertisementStatus.WAITING_FOR_MODERATION) throw new InvalidAdvertisementStateException("Decision already made."); if (ad.getPublicationPaymentMode() == PublicationPaymentMode.FREE) return ad; Payment payment = payments.findByAdvertisementId(id).orElseThrow(PaymentNotFoundException::new); if (payment.getStatus() != PaymentStatus.SUCCEEDED) throw new InvalidPaymentStateException("Payment is not successful."); return ad; }
     private Advertisement operation(UUID id, UUID op) { Advertisement ad = lock(id); if (ad.getModerationSubmissionStatus() != ModerationSubmissionStatus.SENDING || !Objects.equals(op, ad.getModerationOperationId())) throw new InvalidAdvertisementStateException("Moderation operation already completed."); return ad; }
     private Advertisement lock(UUID id) { return advertisements.findByIdForUpdate(id).orElseThrow(AdvertisementNotFoundException::new); }
     private void validateAdmin(Long id) { if (!access.isAdmin(id)) throw new InvalidAdvertisementStateException("Insufficient privileges."); }

@@ -25,6 +25,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.config.PaymentsProperties;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.model.Advertisement;
 import ru.murad.yourmarket.model.AdvertisementPhoto;
@@ -38,7 +39,7 @@ class TelegramPublicationKeyboardTest {
     private final TelegramClient client = mock(TelegramClient.class);
     private final AdvertisementPhotoRepository photos = mock(AdvertisementPhotoRepository.class);
     private final TelegramGatewayImpl gateway = new TelegramGatewayImpl(client, properties(),
-            new TelegramKeyboardFactory(new PublicationProperties()), photos, mock(OperationalMetrics.class),
+            new TelegramKeyboardFactory(new PublicationProperties(), new PaymentsProperties()), photos, mock(OperationalMetrics.class),
             new TelegramErrorClassifier(), mock(ru.murad.yourmarket.service.VehicleDetailsService.class),
             new ru.murad.yourmarket.service.LocationFormatter());
 

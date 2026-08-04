@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.config.PaymentsProperties;
 import ru.murad.yourmarket.dto.request.SuccessfulPaymentRequest;
 import ru.murad.yourmarket.mapper.AdvertisementMapper;
 import ru.murad.yourmarket.model.Advertisement;
@@ -60,6 +61,7 @@ class PaymentServiceTest {
     AdvertisementPhotoRepository adPhotos = mock(AdvertisementPhotoRepository.class);
     AdvertisementMapper mapper = mock(AdvertisementMapper.class);
     PublicationProperties publication = publicationProperties(false);
+    PaymentsProperties paymentSettings = paymentSettings();
     OperationalMetrics metrics = mock(OperationalMetrics.class);
     ru.murad.yourmarket.service.VehicleDetailsService vehicleDetails = mock(ru.murad.yourmarket.service.VehicleDetailsService.class);
     PaymentServiceImpl service = new PaymentServiceImpl(
@@ -71,9 +73,12 @@ class PaymentServiceTest {
         adPhotos,
         mapper,
         publication,
+        paymentSettings,
         metrics,
         vehicleDetails
     );
+
+    private PaymentsProperties paymentSettings() { PaymentsProperties value = new PaymentsProperties(); value.setEnabled(true); return value; }
 
     @Test
     void createsPaymentWithConfiguredAmount() {
@@ -296,8 +301,9 @@ class PaymentServiceTest {
             users,
             draftPhotos,
             adPhotos,
-            mapper,
+                mapper,
                 publicationProperties(true),
+                paymentSettings(),
                 metrics,
                 vehicleDetails
         );

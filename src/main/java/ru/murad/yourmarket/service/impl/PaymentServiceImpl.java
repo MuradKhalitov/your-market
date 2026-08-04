@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.config.PaymentsProperties;
 import ru.murad.yourmarket.dto.request.SuccessfulPaymentRequest;
 import ru.murad.yourmarket.dto.response.PreCheckoutResult;
 import ru.murad.yourmarket.exception.*;
@@ -28,11 +29,13 @@ public class PaymentServiceImpl implements PaymentService {
     private final AdvertisementPhotoRepository photoRepository;
     private final AdvertisementMapper mapper;
     private final PublicationProperties properties;
+    private final PaymentsProperties paymentsProperties;
     private final ru.murad.yourmarket.service.OperationalMetrics metrics;
     private final ru.murad.yourmarket.service.VehicleDetailsService vehicleDetailsService;
 
     @Override @Transactional
     public InvoiceClaim createPaymentAndClaimInvoice(Long userId, String username) {
+        if (!paymentsProperties.isEnabled()) throw new InvalidPaymentStateException("Payments are disabled for new advertisements.");
         telegramUserRepository.findByTelegramUserIdForUpdate(userId)
                 .orElseThrow(() -> new InvalidAdvertisementStateException("Пользователь Telegram не найден."));
         AdvertisementDraft draft = draftRepository.findByTelegramUserId(userId)
@@ -53,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
             return claimInvoice(createStarsPayment(pending, userId));
         }
         Advertisement advertisement = mapper.toAdvertisement(draft, username);
+        advertisement.setPublicationPaymentMode(PublicationPaymentMode.TELEGRAM_STARS);
         advertisement = advertisementRepository.save(advertisement);
         vehicleDetailsService.copyToAdvertisement(draft, advertisement);
         var draftPhotos = draftPhotoRepository.findByDraftIdOrderByPosition(draft.getId());
@@ -68,6 +72,30 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Создан платёж paymentId={}, advertisementId={}, telegramUserId={}",
                 payment.getId(), advertisement.getId(), userId);
         return claimInvoice(payment);
+    }
+
+    @Override @Transactional
+    public SuccessfulPaymentResult submitFreePublication(Long userId, String username) {
+        if (paymentsProperties.isEnabled()) throw new InvalidPaymentStateException("Payments are enabled for new advertisements.");
+        telegramUserRepository.findByTelegramUserIdForUpdate(userId).orElseThrow(() -> new InvalidAdvertisementStateException("Пользователь Telegram не найден."));
+        AdvertisementDraft draft = draftRepository.findByTelegramUserId(userId).orElseThrow(() -> new InvalidAdvertisementStateException("Черновик не найден."));
+        validateComplete(draft);
+        Advertisement advertisement = mapper.toAdvertisement(draft, username);
+        advertisement.setPublicationPaymentMode(PublicationPaymentMode.FREE);
+        advertisement.setStatus(AdvertisementStatus.WAITING_FOR_MODERATION);
+        advertisement = advertisementRepository.save(advertisement);
+        vehicleDetailsService.copyToAdvertisement(draft, advertisement);
+        var draftPhotos = draftPhotoRepository.findByDraftIdOrderByPosition(draft.getId());
+        if (draftPhotos.isEmpty() && draft.getTelegramFileId() != null) {
+            photoRepository.save(AdvertisementPhoto.builder().advertisementId(advertisement.getId()).telegramFileId(draft.getTelegramFileId()).position(0).build());
+        } else {
+            UUID adId = advertisement.getId();
+            photoRepository.saveAll(draftPhotos.stream().map(p -> AdvertisementPhoto.builder().advertisementId(adId).telegramFileId(p.getTelegramFileId()).position(p.getPosition()).build()).toList());
+        }
+        draftPhotoRepository.deleteByDraftId(draft.getId());
+        draftRepository.deleteByTelegramUserId(userId);
+        metrics.freePublication();
+        return new SuccessfulPaymentResult(advertisement.getId(), false);
     }
 
     private Payment createStarsPayment(Advertisement advertisement, Long userId) {
@@ -155,7 +183,7 @@ public class PaymentServiceImpl implements PaymentService {
                 || payment.getAmount().longValue() != totalAmount)
             return PreCheckoutResult.reject("Сумма или валюта платежа не совпадает.");
         Advertisement ad = advertisementRepository.findByIdForUpdate(payment.getAdvertisementId()).orElse(null);
-        if (ad == null || ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
+        if (ad == null || ad.getPublicationPaymentMode() != PublicationPaymentMode.TELEGRAM_STARS || ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
             return PreCheckoutResult.reject("Объявление больше не ожидает оплату.");
         payment.setStatus(PaymentStatus.PRE_CHECKOUT_APPROVED);
         paymentRepository.save(payment);
@@ -176,7 +204,7 @@ public class PaymentServiceImpl implements PaymentService {
                 || !"XTR".equals(payment.getCurrency()) || !payment.getCurrency().equals(request.currency())
                 || payment.getAmount().longValue() != request.totalAmount())
             throw new InvalidPaymentStateException("Данные успешного платежа не прошли проверку.");
-        if (ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
+        if (ad.getPublicationPaymentMode() != PublicationPaymentMode.TELEGRAM_STARS || ad.getStatus() != AdvertisementStatus.WAITING_FOR_PAYMENT)
             throw new InvalidAdvertisementStateException("Объявление не ожидает оплату.");
         Instant now = Instant.now();
         payment.setStatus(PaymentStatus.SUCCEEDED);
@@ -190,6 +218,7 @@ public class PaymentServiceImpl implements PaymentService {
         draftRepository.findByTelegramUserId(request.telegramUserId())
                 .ifPresent(d -> draftPhotoRepository.deleteByDraftId(d.getId()));
         draftRepository.deleteByTelegramUserId(request.telegramUserId());
+        metrics.starsPublication();
         log.info("Платёж подтверждён paymentId={}, advertisementId={}, telegramUserId={}",
                 payment.getId(), ad.getId(), request.telegramUserId());
         return new SuccessfulPaymentResult(ad.getId(), true);

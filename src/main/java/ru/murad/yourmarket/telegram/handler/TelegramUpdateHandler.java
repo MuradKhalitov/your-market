@@ -41,6 +41,7 @@ public class TelegramUpdateHandler {
     private final TelegramKeyboardFactory keyboards;
     private final TelegramProperties telegram;
     private final PublicationProperties publication;
+    private final PaymentsProperties payments;
     private final TelegramUserService userService;
     private final AdvertisementDraftService draftService;
     private final PaymentService paymentService;
@@ -256,7 +257,7 @@ public class TelegramUpdateHandler {
             };
             promptForStep(draftService.beginEdit(from.getId(), target), from.getUserName());
         }
-        else if ("pay".equals(data)) sendInvoice(chatId, from);
+        else if ("pay".equals(data)) { if (payments.isEnabled()) sendInvoice(chatId, from); else submitFreePublication(chatId, from); }
         else if (data.startsWith("delete:")) {
             advertisementService.deletePublished(UUID.fromString(data.substring(7)), from.getId());
             send(chatId, "Объявление снято с публикации.", keyboards.mainMenu());
@@ -329,6 +330,21 @@ public class TelegramUpdateHandler {
             try { paymentService.markInvoiceUnknown(claim.payment().getId(), claim.operationId()); }
             catch (RuntimeException markError) { log.error("Не удалось пометить invoice SEND_UNKNOWN paymentId={}", claim.payment().getId(), markError); }
             throw ex;
+        }
+    }
+
+    private void submitFreePublication(Long chatId, User from) {
+        PaymentService.SuccessfulPaymentResult result = paymentService.submitFreePublication(from.getId(), from.getUserName());
+        if (publication.isModerationEnabled()) {
+            moderationService.submit(result.advertisementId());
+            send(chatId, "Сейчас публикация объявлений бесплатна.\nОбъявление отправлено на модерацию.", keyboards.mainMenu());
+            return;
+        }
+        try {
+            publicationService.publishFromModeration(result.advertisementId());
+            send(chatId, "Сейчас публикация объявлений бесплатна.\nОбъявление опубликовано: " + telegram.channel().url(), keyboards.mainMenu());
+        } catch (RuntimeException ex) {
+            send(chatId, "Сейчас публикация объявлений бесплатна. Объявление ожидает публикации.", keyboards.mainMenu());
         }
     }
 
@@ -540,11 +556,12 @@ public class TelegramUpdateHandler {
 
 
     private void preview(AdvertisementDraft d) {
-        String caption = "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 Город: %s\nКатегория: %s\n\n%s\n\n👤 Продавец: %s\n\nСтоимость публикации: %s ⭐"
+        String caption = "%s <b>%s</b>\n\n💰 Цена: %s ₽\n📍 Город: %s\nКатегория: %s\n\n%s\n\n👤 Продавец: %s"
                 .formatted(d.getCategory().getEmoji(), TelegramGatewayImpl.html(d.getTitle()),
                         TelegramGatewayImpl.price(d.getItemPrice()), TelegramGatewayImpl.html(locationFormatter.format(d)),
                         d.getCategory().getDisplayName(), TelegramGatewayImpl.html(d.getDescription()),
-                        TelegramGatewayImpl.html(d.getContact()), publication.getPriceStars());
+                        TelegramGatewayImpl.html(d.getContact()));
+        caption += payments.isEnabled() ? "\n\nСтоимость публикации: " + publication.getPriceStars() + " ⭐" : "\n\nПубликация сейчас бесплатна.";
         if (d.getCategory() == AdvertisementCategory.AUTO) {
             String vehicle = vehicleFlow.find(d.getTelegramUserId()).map(vehicleFormatter::format).orElse("");
             if (!vehicle.isBlank()) caption += "\n\n" + vehicle;

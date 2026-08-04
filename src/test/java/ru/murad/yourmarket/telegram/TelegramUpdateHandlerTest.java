@@ -33,6 +33,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMar
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import ru.murad.yourmarket.config.PublicationProperties;
+import ru.murad.yourmarket.config.PaymentsProperties;
 import ru.murad.yourmarket.config.TelegramProperties;
 import ru.murad.yourmarket.model.AdvertisementDraft;
 import ru.murad.yourmarket.model.Payment;
@@ -71,7 +72,8 @@ class TelegramUpdateHandlerTest {
     TelegramProperties telegram = new TelegramProperties(new TelegramProperties.Bot("bot", "token"),
         new TelegramProperties.Channel("-1001", "channel", "https://t.me/channel"));
     PublicationProperties publication = publicationProperties();
-    TelegramKeyboardFactory keyboards = new TelegramKeyboardFactory(publication);
+    PaymentsProperties paymentSettings = paymentSettings();
+    TelegramKeyboardFactory keyboards = new TelegramKeyboardFactory(publication, paymentSettings);
     StartCommandParser startCommands = new StartCommandParser();
     ru.murad.yourmarket.service.VehicleDraftFlowService vehicleFlow = mock(ru.murad.yourmarket.service.VehicleDraftFlowService.class);
     ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory vehicleKeyboards = mock(ru.murad.yourmarket.telegram.keyboard.VehicleKeyboardFactory.class);
@@ -84,7 +86,7 @@ class TelegramUpdateHandlerTest {
         return properties;
     }
     TelegramUpdateHandler handler = new TelegramUpdateHandler(client, gateway, keyboards, telegram,
-        publication,
+        publication, paymentSettings,
         users, drafts, payments, publications, advertisements, retries, links, moderation,
         rateLimit, draftPhotos, startCommands,
         new ru.murad.yourmarket.telegram.TelegramMessageProvider(), vehicleFlow, vehicleKeyboards,
@@ -173,6 +175,7 @@ class TelegramUpdateHandlerTest {
         assertTrue(lastMessage().getText().contains("Авто"));
         assertTrue(lastMessage().getText().contains("Шаг 2 из 7"));
     }
+    private PaymentsProperties paymentSettings() { PaymentsProperties value = new PaymentsProperties(); value.setEnabled(true); return value; }
 
     @Test
     void choosingRegionShowsCityListAfterFlowCommitsWaitingForCityState() throws Exception {

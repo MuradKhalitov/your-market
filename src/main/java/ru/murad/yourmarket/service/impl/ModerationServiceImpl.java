@@ -9,6 +9,7 @@ import ru.murad.yourmarket.service.AdvertisementPublicationService;
 import ru.murad.yourmarket.service.ModerationService;
 import ru.murad.yourmarket.service.ModerationTransactionService;
 import ru.murad.yourmarket.telegram.TelegramGateway;
+import ru.murad.yourmarket.model.enums.PublicationPaymentMode;
 
 @Service
 @RequiredArgsConstructor
@@ -49,7 +50,8 @@ public class ModerationServiceImpl implements ModerationService {
     @Override
     public AdvertisementResponseDto approve(UUID id, Long admin) {
         transactions.approve(id, admin);
-        return publication.publish(id);
+        return transactions.claimSubmission(id).advertisement().getPublicationPaymentMode() == PublicationPaymentMode.FREE
+                ? publication.publishFromModeration(id) : publication.publish(id);
     }
 
     @Override
