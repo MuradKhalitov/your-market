@@ -52,7 +52,7 @@ class TelegramPublicationKeyboardTest {
         ArgumentCaptor<SendInvoice> captor = ArgumentCaptor.forClass(SendInvoice.class);
         verify(client).execute(captor.capture());
         assertEquals("XTR", captor.getValue().getCurrency());
-        assertEquals(1, captor.getValue().getPrices().getFirst().getAmount());
+        assertEquals(1, captor.getValue().getPrices().get(0).getAmount());
         assertEquals(1, captor.getValue().getPrices().size());
         assertNull(captor.getValue().getMaxTipAmount());
         assertTrue(captor.getValue().getSuggestedTipAmounts() == null
@@ -143,7 +143,7 @@ class TelegramPublicationKeyboardTest {
         verify(client).execute(captor.capture());
         verify(client, never()).execute(any(SendMessage.class));
         assertFalse(gateway.needsSeparateContactMessage(advertisement));
-        assertTrue(captor.getValue().getMedias().getFirst().getCaption()
+        assertTrue(captor.getValue().getMedias().get(0).getCaption()
                 .contains("<a href=\"https://t.me/seller\">@seller</a>"));
     }
 

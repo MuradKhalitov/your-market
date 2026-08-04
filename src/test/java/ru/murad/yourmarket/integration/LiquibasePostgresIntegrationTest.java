@@ -58,7 +58,7 @@ import ru.murad.yourmarket.telegram.TelegramGateway;
 class LiquibasePostgresIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16.3-alpine");
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -125,7 +125,8 @@ class LiquibasePostgresIntegrationTest {
 
     @Test
     void parallelRateLimitIsAtomic() throws Exception {
-        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(30);
+        try {
             var tasks = java.util.stream.IntStream.range(0, 30)
                 .mapToObj(i -> (java.util.concurrent.Callable<Boolean>)
                     () -> rateLimit.allow(999L, "PARALLEL")).toList();
@@ -137,6 +138,8 @@ class LiquibasePostgresIntegrationTest {
                 }
             }).count();
             assertEquals(20, allowed);
+        } finally {
+            executor.shutdownNow();
         }
     }
 
@@ -191,7 +194,8 @@ class LiquibasePostgresIntegrationTest {
     void concurrentInvoiceClaimsCreateOnePaymentAndOneOwner() throws Exception {
         long userId = 88001L;
         prepareCompleteDraft(userId);
-        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
             var start = new java.util.concurrent.CountDownLatch(1);
             var task = (java.util.concurrent.Callable<PaymentService.InvoiceClaim>) () -> {
                 start.await();
@@ -206,6 +210,8 @@ class LiquibasePostgresIntegrationTest {
             assertEquals(1, claims.stream().filter(c -> c.result() == PaymentService.InvoiceClaimResult.IN_PROGRESS).count());
             assertEquals(1, repository.findAll().stream().filter(p -> p.getTelegramUserId().equals(userId)).count());
             assertEquals(1, claims.stream().map(c -> c.payment().getPayload()).distinct().count());
+        } finally {
+            executor.shutdownNow();
         }
     }
 
@@ -415,7 +421,8 @@ class LiquibasePostgresIntegrationTest {
     }
 
     private void runConcurrently(Runnable action) throws Exception {
-        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
             var start = new java.util.concurrent.CountDownLatch(1);
             var tasks = java.util.List.of((java.util.concurrent.Callable<Void>) () -> {
                     start.await();
@@ -432,6 +439,8 @@ class LiquibasePostgresIntegrationTest {
             for (var future : futures) {
                 future.get();
             }
+        } finally {
+            executor.shutdownNow();
         }
     }
 

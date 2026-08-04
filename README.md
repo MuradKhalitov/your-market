@@ -1,6 +1,8 @@
 # YourMarket
 
-YourMarket — Telegram-доска объявлений на Java 21 и Spring Boot 3. Пользователь создаёт объявление, оплачивает публикацию в Telegram Stars и получает публикацию в канале.
+YourMarket — Telegram-доска объявлений на Java 17 и Spring Boot 3. Пользователь создаёт объявление, оплачивает публикацию в Telegram Stars и получает публикацию в канале.
+
+Для локальной разработки требуется JDK 17. Проверьте его командой `java -version`; для сборки используйте Maven Wrapper (`.\mvnw.cmd`). Runtime-образ Docker использует Eclipse Temurin 17 JRE.
 
 ## Оплата
 

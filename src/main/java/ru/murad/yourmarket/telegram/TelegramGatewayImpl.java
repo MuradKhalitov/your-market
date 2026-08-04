@@ -37,7 +37,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
 
     @Override
     public Integer publishAdvertisement(Advertisement ad) {
-        return publishAdvertisementMessages(ad).getFirst();
+        return publishAdvertisementMessages(ad).get(0);
     }
 
     @Override
@@ -61,7 +61,7 @@ public class TelegramGatewayImpl implements TelegramGateway {
                 List<Message> messages = client.execute(SendMediaGroup.builder().chatId(telegram.channel().id()).medias(media).build());
                 return messages.stream().map(Message::getMessageId).toList();
             }
-            String fileId = photos.isEmpty() ? ad.getTelegramFileId() : photos.getFirst().getTelegramFileId();
+            String fileId = photos.isEmpty() ? ad.getTelegramFileId() : photos.get(0).getTelegramFileId();
             SendPhoto.SendPhotoBuilder<?, ?> builder = SendPhoto.builder()
                     .chatId(telegram.channel().id())
                     .photo(new InputFile(fileId))

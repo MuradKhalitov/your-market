@@ -350,7 +350,8 @@ class TelegramUpdateHandlerTest {
                         ? new PaymentService.InvoiceClaim(payment, operationId, PaymentService.InvoiceClaimResult.CLAIMED)
                         : new PaymentService.InvoiceClaim(payment, operationId, PaymentService.InvoiceClaimResult.IN_PROGRESS));
 
-        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
             var start = new java.util.concurrent.CountDownLatch(1);
             var tasks = List.of((java.util.concurrent.Callable<Void>) () -> {
                 start.await(); handler.handle(callback("pay")); return null;
@@ -360,6 +361,8 @@ class TelegramUpdateHandlerTest {
             var futures = tasks.stream().map(executor::submit).toList();
             start.countDown();
             for (var future : futures) future.get();
+        } finally {
+            executor.shutdownNow();
         }
 
         verify(gateway, times(1)).sendInvoice(10L, payment);

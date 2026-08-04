@@ -22,8 +22,8 @@ try {
 
     Write-Host $javaVersion.Trim()
 
-    if ($javaVersion -notmatch '"21\.') {
-        throw "Java 21 is required."
+    if ($javaVersion -notmatch '"17\.') {
+        throw "Java 17 is required."
     }
 
     Write-Host "==> Checking Docker"

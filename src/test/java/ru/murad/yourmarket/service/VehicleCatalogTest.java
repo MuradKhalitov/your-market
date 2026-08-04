@@ -8,7 +8,7 @@ class VehicleCatalogTest {
         VehicleCatalog catalog = new VehicleCatalog();
         catalog.load();
         assertTrue(catalog.brands().size() >= 35);
-        assertEquals("LADA", catalog.brands().getFirst().code());
+        assertEquals("LADA", catalog.brands().get(0).code());
         assertTrue(catalog.models("TOYOTA").stream().anyMatch(model -> model.code().equals("CAMRY")));
     }
     @Test void searchIsCaseInsensitiveAndScopedToBrand() {

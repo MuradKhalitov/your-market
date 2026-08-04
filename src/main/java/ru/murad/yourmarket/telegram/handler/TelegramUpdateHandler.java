@@ -562,7 +562,7 @@ public class TelegramUpdateHandler {
                 send(d.getChatId(), "Выберите действие с объявлением:", keyboards.preview());
                 return;
             }
-            String fileId = photos.isEmpty() ? d.getTelegramFileId() : photos.getFirst().getTelegramFileId();
+            String fileId = photos.isEmpty() ? d.getTelegramFileId() : photos.get(0).getTelegramFileId();
             client.execute(SendPhoto.builder().chatId(d.getChatId()).photo(new InputFile(fileId))
                     .caption(caption).parseMode("HTML").replyMarkup(keyboards.preview()).build());
         } catch (Exception ex) { throw new IllegalStateException("Не удалось отправить предпросмотр", ex); }
