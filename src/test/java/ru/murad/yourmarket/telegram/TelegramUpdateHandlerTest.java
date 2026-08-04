@@ -175,6 +175,24 @@ class TelegramUpdateHandlerTest {
     }
 
     @Test
+    void choosingRegionShowsCityListAfterFlowCommitsWaitingForCityState() throws Exception {
+        AdvertisementDraft selected = draft(AdvertisementCreationStep.WAITING_FOR_CITY);
+        selected.setRegionCode("DAGESTAN");
+        selected.setRegionNameSnapshot("Республика Дагестан");
+        when(drafts.findActive(1L)).thenReturn(Optional.of(selected));
+        when(locationFlow.chooseRegion(1L, "DAGESTAN")).thenReturn(selected);
+        InlineKeyboardMarkup cityKeyboard = InlineKeyboardMarkup.builder().keyboard(List.of()).build();
+        when(locationKeyboards.cities("DAGESTAN", 0)).thenReturn(cityKeyboard);
+
+        handler.handle(callback("ad:loc:r:DAGESTAN"));
+
+        verify(locationFlow).chooseRegion(1L, "DAGESTAN");
+        verify(locationKeyboards).cities("DAGESTAN", 0);
+        assertEquals("Выберите город в регионе «Республика Дагестан»:", lastMessage().getText());
+        assertEquals(cityKeyboard, lastMessage().getReplyMarkup());
+    }
+
+    @Test
     void realEstateCallbackUsesEnumCodeInsteadOfButtonText() {
         when(drafts.findActive(1L)).thenReturn(Optional.of(draft(AdvertisementCreationStep.WAITING_FOR_CATEGORY)));
         when(drafts.setCategory(1L, AdvertisementCategory.REAL_ESTATE))

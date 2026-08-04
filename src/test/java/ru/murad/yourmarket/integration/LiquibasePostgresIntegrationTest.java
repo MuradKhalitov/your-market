@@ -39,6 +39,7 @@ import ru.murad.yourmarket.service.AdvertisementExpirationService;
 import ru.murad.yourmarket.service.AdvertisementPublicationService;
 import ru.murad.yourmarket.service.RateLimitService;
 import ru.murad.yourmarket.service.PaymentService;
+import ru.murad.yourmarket.service.AdvertisementLocationFlowService;
 import ru.murad.yourmarket.repository.TelegramUserRepository;
 import ru.murad.yourmarket.repository.AdvertisementDraftRepository;
 import ru.murad.yourmarket.repository.VehicleDraftDetailsRepository;
@@ -90,6 +91,8 @@ class LiquibasePostgresIntegrationTest {
     AdvertisementDraftRepository drafts;
     @Autowired
     VehicleDraftDetailsRepository vehicleDraftDetails;
+    @Autowired
+    AdvertisementLocationFlowService locationFlow;
     @MockitoBean
     TelegramGateway telegramGateway;
 
@@ -301,6 +304,104 @@ class LiquibasePostgresIntegrationTest {
         drafts.deleteById(draft.getId());
         assertEquals(0, jdbcTemplate.queryForObject("select count(*) from vehicle_draft_details where advertisement_draft_id = ?",
                 Integer.class, draft.getId()));
+    }
+
+    @Test
+    void draftWithoutLocationIsAllowed() {
+        insertDraft(991001L, "WAITING_FOR_REGION", null, null, null, null, null, null);
+    }
+
+    @Test
+    void selectedRegionWithoutCityIsAllowed() {
+        insertDraft(991002L, "WAITING_FOR_CITY", null, "DAGESTAN", "Республика Дагестан", null, null, null);
+    }
+
+    @Test
+    void selectedRegionWithoutCityIsAllowedWhileWaitingForCity() {
+        insertDraft(991003L, "WAITING_FOR_CITY", null, "DAGESTAN", "Республика Дагестан", null, null, null);
+    }
+
+    @Test
+    void selectedRegionWithoutCityIsAllowedWhileSearchingForCity() {
+        insertDraft(991004L, "WAITING_FOR_CITY_SEARCH", null, "DAGESTAN", "Республика Дагестан", null, null, null);
+    }
+
+    @Test
+    void selectedRegionWithoutCityIsAllowedWhileWaitingForCustomLocality() {
+        insertDraft(991014L, "WAITING_FOR_CUSTOM_LOCALITY", null, "DAGESTAN", "Республика Дагестан", null, null, null);
+    }
+
+    @Test
+    void catalogCityWithSnapshotIsAllowed() {
+        insertDraft(991005L, "WAITING_FOR_CONTACT_CHOICE", "Республика Дагестан, Махачкала", "DAGESTAN", "Республика Дагестан", "MAKHACHKALA", "Махачкала", null);
+    }
+
+    @Test
+    void otherLocalityWithCustomNameIsAllowed() {
+        insertDraft(991006L, "WAITING_FOR_CONTACT_CHOICE", "Республика Дагестан, село Хучни", "DAGESTAN", "Республика Дагестан", "OTHER", null, "село Хучни");
+    }
+
+    @Test
+    void cityWithoutRegionIsRejected() {
+        assertThrows(DataIntegrityViolationException.class, () ->
+            insertDraft(991007L, "WAITING_FOR_CITY", null, null, null, "MAKHACHKALA", "Махачкала", null));
+    }
+
+    @Test
+    void regionCodeWithoutRegionSnapshotIsRejected() {
+        assertThrows(DataIntegrityViolationException.class, () ->
+            insertDraft(991008L, "WAITING_FOR_CITY", null, "DAGESTAN", null, null, null, null));
+    }
+
+    @Test
+    void otherWithoutCustomLocalityIsRejected() {
+        assertThrows(DataIntegrityViolationException.class, () ->
+            insertDraft(991009L, "WAITING_FOR_CUSTOM_LOCALITY", null, "DAGESTAN", "Республика Дагестан", "OTHER", null, null));
+    }
+
+    @Test
+    void catalogCityWithoutSnapshotIsRejected() {
+        assertThrows(DataIntegrityViolationException.class, () ->
+            insertDraft(991010L, "WAITING_FOR_CONTACT_CHOICE", null, "DAGESTAN", "Республика Дагестан", "MAKHACHKALA", null, null));
+    }
+
+    @Test
+    void catalogCityWithCustomLocalityIsRejected() {
+        assertThrows(DataIntegrityViolationException.class, () ->
+            insertDraft(991011L, "WAITING_FOR_CONTACT_CHOICE", null, "DAGESTAN", "Республика Дагестан", "MAKHACHKALA", "Махачкала", "село Хучни"));
+    }
+
+    @Test
+    void legacyCityOnlyDraftIsAllowed() {
+        insertDraft(991012L, "WAITING_FOR_CONTACT_CHOICE", "Махачкала", null, null, null, null, null);
+    }
+
+    @Test
+    void choosingRegionCommitsIntermediateLocationAndLeavesCityEmpty() {
+        long userId = 991013L;
+        drafts.saveAndFlush(AdvertisementDraft.builder().telegramUserId(userId).chatId(userId)
+                .step(AdvertisementCreationStep.WAITING_FOR_REGION).build());
+
+        locationFlow.chooseRegion(userId, "DAGESTAN");
+
+        AdvertisementDraft saved = drafts.findByTelegramUserId(userId).orElseThrow();
+        assertEquals(AdvertisementCreationStep.WAITING_FOR_CITY, saved.getStep());
+        assertEquals("DAGESTAN", saved.getRegionCode());
+        assertEquals("Республика Дагестан", saved.getRegionNameSnapshot());
+        assertEquals(null, saved.getCityCode());
+        assertEquals(null, saved.getCityNameSnapshot());
+        assertEquals(null, saved.getCustomLocality());
+    }
+
+    private void insertDraft(long userId, String step, String city, String regionCode,
+            String regionName, String cityCode, String cityName, String customLocality) {
+        jdbcTemplate.update("""
+                INSERT INTO advertisement_drafts
+                (id, telegram_user_id, chat_id, step, city, region_code, region_name_snapshot,
+                 city_code, city_name_snapshot, custom_locality, edit_mode, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, now(), now())
+                """, UUID.randomUUID(), userId, userId, step, city, regionCode, regionName,
+                cityCode, cityName, customLocality);
     }
 
     private void prepareCompleteDraft(long userId) {

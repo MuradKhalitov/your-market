@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-fix-draft-location-constraint
+      author: yourmarket
+      changes:
+        - sql: {sql: "ALTER TABLE advertisement_drafts DROP CONSTRAINT chk_draft_location_consistency"}
+        - sql:
+            sql: |
+              ALTER TABLE advertisement_drafts ADD CONSTRAINT chk_draft_location_consistency
+              CHECK (
+                (region_code IS NULL AND region_name_snapshot IS NULL AND city_code IS NULL AND city_name_snapshot IS NULL AND custom_locality IS NULL)
+                OR
+                (region_code IS NOT NULL AND btrim(region_code) <> '' AND region_name_snapshot IS NOT NULL AND btrim(region_name_snapshot) <> ''
+                  AND city_code IS NULL AND city_name_snapshot IS NULL AND custom_locality IS NULL)
+                OR
+                (region_code IS NOT NULL AND btrim(region_code) <> '' AND region_name_snapshot IS NOT NULL AND btrim(region_name_snapshot) <> ''
+                  AND city_code IS NOT NULL AND btrim(city_code) <> '' AND city_code <> 'OTHER'
+                  AND city_name_snapshot IS NOT NULL AND btrim(city_name_snapshot) <> '' AND custom_locality IS NULL)
+                OR
+                (region_code IS NOT NULL AND btrim(region_code) <> '' AND region_name_snapshot IS NOT NULL AND btrim(region_name_snapshot) <> ''
+                  AND city_code = 'OTHER' AND city_name_snapshot IS NULL
+                  AND custom_locality IS NOT NULL AND btrim(custom_locality) <> '')
+              );
+      rollback:
+        - sql: {sql: "ALTER TABLE advertisement_drafts DROP CONSTRAINT chk_draft_location_consistency"}
+        - sql:
+            sql: |
+              ALTER TABLE advertisement_drafts ADD CONSTRAINT chk_draft_location_consistency
+              CHECK ((region_code IS NULL AND region_name_snapshot IS NULL AND city_code IS NULL AND city_name_snapshot IS NULL AND custom_locality IS NULL) OR (region_code IS NOT NULL AND btrim(region_name_snapshot) <> '' AND ((city_code = 'OTHER' AND city_name_snapshot IS NULL AND custom_locality IS NOT NULL AND btrim(custom_locality) <> '') OR (city_code <> 'OTHER' AND city_name_snapshot IS NOT NULL AND btrim(city_name_snapshot) <> '' AND custom_locality IS NULL))));
