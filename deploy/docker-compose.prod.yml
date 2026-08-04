@@ -52,7 +52,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "java", "-cp", "/app/healthcheck", "Healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 12
